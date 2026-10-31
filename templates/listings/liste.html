@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% load immo %}
+{% block titre %}{{ titre }}{% if p.ville %} : résultats{% endif %} | Congo Immo{% endblock %}
+{% block head %}{% if vue == "carte" %}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">{% endif %}{% endblock %}
+{% block contenu %}
+<section class="conteneur section section--haut">
+  <div class="section__tete">
+    <h1 class="section__titre section__titre--grand">{{ titre }}</h1>
+    <div class="vues" role="group" aria-label="Mode d'affichage">
+      <a class="{% if vue == 'liste' %}is-actif{% endif %}" href="?{% garder_params vue='' page='' %}" {% if vue == 'liste' %}aria-current="true"{% endif %}>Liste</a>
+      <a class="{% if vue == 'carte' %}is-actif{% endif %}" href="?{% garder_params vue='carte' page='' %}" {% if vue == 'carte' %}aria-current="true"{% endif %}>Carte</a>
+    </div>
+  </div>
+
+  <form class="filtres" method="get" action="">
+    {% if vue == "carte" %}<input type="hidden" name="vue" value="carte">{% endif %}
+    <div class="filtres__ligne">
+      {% if not type_fixe %}
+      <label>Type d'annonce
+        <select name="type"><option value="">Louer ou acheter</option>
+          <option value="location" {% if p.type == "location" %}selected{% endif %}>À louer</option>
+          <option value="vente" {% if p.type == "vente" %}selected{% endif %}>À vendre</option>
+        </select>
+      </label>
+      {% endif %}
+      <label>Ville
+        <select name="ville"><option value="">Toute la RDC</option>
+          {% for pr in provinces %}{% if pr.villes.all %}<optgroup label="{{ pr.nom }}">{% for v in pr.villes.all %}<option value="{{ v.id }}" {% if p.ville == v.id|stringformat:"s" %}selected{% endif %}>{{ v.nom }}</option>{% endfor %}</optgroup>{% endif %}{% endfor %}
+        </select>
+      </label>
+      <label>Quartier
+        <input type="text" name="quartier" value="{{ p.quartier|default:'' }}" placeholder="ex. Bel-Air">
+      </label>
+      <label>Type de bien
+        <select name="categorie"><option value="">Tous</option>
+          {% for val, lib in categories %}<option value="{{ val }}" {% if p.categorie == val %}selected{% endif %}>{{ lib }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Budget min
+        <input type="number" name="prix_min" min="0" value="{{ p.prix_min|default:'' }}" inputmode="numeric">
+      </label>
+      <label>Budget max
+        <input type="number" name="prix_max" min="0" value="{{ p.prix_max|default:'' }}" inputmode="numeric">
+      </label>
+      <label>Devise
+        <select name="devise"><option value="">Toutes</option>
+          <option value="USD" {% if p.devise == "USD" %}selected{% endif %}>USD</option>
+          <option value="CDF" {% if p.devise == "CDF" %}selected{% endif %}>CDF</option>
+        </select>
+      </label>
+      <button class="bouton" type="submit">Filtrer</button>
+    </div>
+    <details class="filtres__plus" {% if p.chambres or p.document or p.verifie or p.q or p.tri %}open{% endif %}>
+      <summary>Plus de critères</summary>
+      <div class="filtres__ligne">
+        <label>Mot-clé
+          <input type="search" name="q" value="{{ p.q|default:'' }}" placeholder="ex. carrelage, avenue Tulipier">
+        </label>
+        <label>Chambres (minimum)
+          <select name="chambres"><option value="">Peu importe</option>
+            {% for n in "12345" %}<option value="{{ n }}" {% if p.chambres == n %}selected{% endif %}>{{ n }} et plus</option>{% endfor %}
+          </select>
+        </label>
+        <label>Document (vente)
+          <select name="document"><option value="">Tous</option>
+            {% for val, lib in documents %}<option value="{{ val }}" {% if p.document == val %}selected{% endif %}>{{ lib }}</option>{% endfor %}
+          </select>
+        </label>
+        <label>Trier par
+          <select name="tri">
+            <option value="">Plus récentes</option>
+            <option value="prix_asc" {% if p.tri == "prix_asc" %}selected{% endif %}>Prix croissant</option>
+            <option value="prix_desc" {% if p.tri == "prix_desc" %}selected{% endif %}>Prix décroissant</option>
+            <option value="populaire" {% if p.tri == "populaire" %}selected{% endif %}>Les plus consultées</option>
+          </select>
+        </label>
+        <label class="case"><input type="checkbox" name="verifie" value="1" {% if p.verifie %}checked{% endif %}> Annonceurs vérifiés seulement</label>
+      </div>
+    </details>
+  </form>
+
+  <p class="resultats-info" aria-live="polite">
+    <b>{{ total }}</b> bien{{ total|pluralize:"s" }} trouvé{{ total|pluralize:"s" }}.
+    {% if filtres_actifs %}<a href="{% if type_fixe %}{% if type_fixe == 'location' %}{% url 'listings:louer' %}{% else %}{% url 'listings:acheter' %}{% endif %}{% else %}{% url 'listings:liste' %}{% endif %}">Effacer les filtres</a>{% endif %}
+  </p>
+
+  {% if vue == "carte" %}
+  <div id="carte-resultats" class="carte carte--grande" data-geojson="{% url 'listings:geojson' %}?{{ request.GET.urlencode }}{% if type_fixe %}&type={{ type_fixe }}{% endif %}" role="region" aria-label="Carte des biens"></div>
+  <p class="aide">Les biens sans position GPS n'apparaissent pas sur la carte : ils sont dans la liste ci-dessous.</p>
+  {% endif %}
+
+  {% if page.object_list %}
+  <div class="grille">{% for b in page %}{% include "listings/_fiche.html" %}{% endfor %}</div>
+  {% if page.paginator.num_pages > 1 %}
+  <nav class="pagination" aria-label="Pagination">
+    {% if page.has_previous %}<a href="?{% garder_params page=page.previous_page_number %}">Page précédente</a>{% endif %}
+    <span>Page {{ page.number }} sur {{ page.paginator.num_pages }}</span>
+    {% if page.has_next %}<a href="?{% garder_params page=page.next_page_number %}">Page suivante</a>{% endif %}
+  </nav>
+  {% endif %}
+  {% else %}
+  <div class="vide vide--bloc">
+    <h2>Aucun bien ne correspond à cette recherche.</h2>
+    <p>Élargissez le budget, retirez le quartier ou choisissez toute la RDC.</p>
+    <a class="bouton" href="{% url 'listings:creer' %}">Publier un bien</a>
+  </div>
+  {% endif %}
+</section>
+{% endblock %}
+{% block scripts %}{% if vue == "carte" %}<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>{% endif %}{% endblock %}

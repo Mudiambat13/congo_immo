@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block titre %}Page introuvable : Congo Immo{% endblock %}
+{% block contenu %}
+<section class="conteneur page-simple">
+  <h1>Cette page n'existe pas ou l'annonce a été retirée.</h1>
+  <p>Le bien a peut-être été loué ou vendu. Parcourez les annonces disponibles.</p>
+  <p><a class="bouton" href="{% url 'listings:liste' %}">Voir les annonces</a></p>
+</section>
+{% endblock %}

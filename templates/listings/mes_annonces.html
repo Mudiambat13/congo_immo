@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% load immo %}
+{% block titre %}Mes annonces | Congo Immo{% endblock %}
+{% block contenu %}
+<div class="conteneur section section--haut">
+  <div class="section__tete">
+    <h1 class="section__titre section__titre--grand">Mes annonces</h1>
+    <a class="bouton" href="{% url 'listings:creer' %}">Publier un bien</a>
+  </div>
+
+  <dl class="stats">
+    <div><dt>Annonces en ligne</dt><dd>{{ totaux.actives }}</dd></div>
+    <div><dt>Vues</dt><dd>{{ totaux.vues }}</dd></div>
+    <div><dt>Contacts reçus</dt><dd>{{ totaux.contacts }}</dd></div>
+    <div><dt>Mises en favori</dt><dd>{{ totaux.favoris }}</dd></div>
+  </dl>
+
+  {% if biens %}
+  <ul class="gestion">
+    {% for b in biens %}
+    <li class="gestion__ligne gestion__ligne--{{ b.statut }}">
+      <a class="gestion__photo" href="{{ b.get_absolute_url }}">
+        {% with c=b.couverture %}{% if c %}<img src="{% if c.miniature %}{{ c.miniature.url }}{% else %}{{ c.image.url }}{% endif %}" alt="" loading="lazy" width="160" height="107">{% else %}<span>Pas de photo</span>{% endif %}{% endwith %}
+      </a>
+      <div class="gestion__texte">
+        <p class="gestion__statut">{{ b.get_type_annonce_display }}, <b>{{ b.get_statut_display }}</b>{% if not b.publie %}, masquée par la modération{% endif %}</p>
+        <h2><a href="{{ b.get_absolute_url }}">{{ b.objet }}</a></h2>
+        <p>{{ b.localisation_courte }}, {{ b.prix_affiche }}{% if b.est_location %} par mois{% endif %}</p>
+        <p class="aide">{{ b.vues|pluriel:"vue" }}, {{ b.contacts|pluriel:"contact" }}, {{ b.nb_favoris|pluriel:"favori" }}. Réf. {{ b.reference }}</p>
+      </div>
+      <div class="gestion__actions">
+        <a class="bouton bouton--petit bouton--contour" href="{% url 'listings:modifier' b.reference %}">Modifier</a>
+        <a class="bouton bouton--petit bouton--contour" href="{% url 'listings:affiche' b.reference %}" target="_blank">Affiche QR</a>
+        <form method="post" action="{% url 'listings:statut' b.reference %}">{% csrf_token %}
+          {% if b.statut == "disponible" %}
+          <button class="bouton bouton--petit bouton--contour" name="statut" value="conclu">{% if b.est_location %}Loué{% else %}Vendu{% endif %}</button>
+          {% else %}
+          <button class="bouton bouton--petit bouton--contour" name="statut" value="disponible">Remettre en ligne</button>
+          {% endif %}
+        </form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="vide vide--bloc">
+    <h2>Vous n'avez pas encore d'annonce.</h2>
+    <p>Publier prend cinq minutes : décrivez le bien, ajoutez des photos et placez-le sur la carte.</p>
+    <a class="bouton bouton--grand" href="{% url 'listings:creer' %}">Publier mon premier bien</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

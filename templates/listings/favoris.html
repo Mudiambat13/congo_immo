@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block titre %}Mes favoris | Congo Immo{% endblock %}
+{% block contenu %}
+<div class="conteneur section section--haut">
+  <h1 class="section__titre section__titre--grand">Mes favoris</h1>
+  {% if biens %}
+  <div class="grille">{% for b in biens %}{% include "listings/_fiche.html" %}{% endfor %}</div>
+  {% else %}
+  <div class="vide vide--bloc">
+    <h2>Aucun favori pour l'instant.</h2>
+    <p>Touchez le cœur sur une annonce pour la retrouver ici.</p>
+    <a class="bouton" href="{% url 'listings:liste' %}">Parcourir les annonces</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

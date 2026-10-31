@@ -1,0 +1,29 @@
+{% load immo %}
+<article class="fiche fiche--{{ b.type_annonce }}">
+  <a class="fiche__photo" href="{{ b.get_absolute_url }}" tabindex="-1" aria-hidden="true">
+    {% with c=b.couverture %}
+      {% if c %}<img src="{% if c.miniature %}{{ c.miniature.url }}{% else %}{{ c.image.url }}{% endif %}" alt="" loading="lazy" width="640" height="427">{% else %}<span class="fiche__vide">Pas de photo</span>{% endif %}
+    {% endwith %}
+    <span class="fiche__type">{{ b.get_type_annonce_display }}</span>
+  </a>
+  {% if user.is_authenticated %}
+  <form method="post" action="{% url 'listings:favori' b.reference %}" class="fiche__favori">
+    {% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}">
+    <button type="submit" data-favori class="favori{% if b.pk in favoris_ids %} is-on{% endif %}" aria-pressed="{% if b.pk in favoris_ids %}true{% else %}false{% endif %}" aria-label="Enregistrer dans mes favoris"><svg width="22" height="22"><use href="#i-coeur"/></svg></button>
+  </form>
+  {% else %}
+  <a class="favori fiche__favori" href="{% url 'accounts:connexion' %}?next={{ request.get_full_path|urlencode }}" aria-label="Se connecter pour enregistrer ce bien"><svg width="22" height="22"><use href="#i-coeur"/></svg></a>
+  {% endif %}
+  <div class="fiche__corps">
+    <p class="fiche__prix">{{ b.prix_affiche }}{% if b.est_location %}<small>par mois</small>{% endif %}</p>
+    <h3 class="fiche__titre"><a href="{{ b.get_absolute_url }}">{{ b.objet }}</a>{% if b.est_verifie or b.proprietaire.est_verifie %}<svg class="verif" width="18" height="18" role="img" aria-label="Annonce vérifiée"><use href="#i-verif"/></svg>{% endif %}</h3>
+    <p class="fiche__lieu"><svg width="15" height="15" aria-hidden="true"><use href="#i-pin"/></svg>{{ b.localisation_courte }}</p>
+    <ul class="traits">
+      {% if b.chambres %}<li>{{ b.chambres|pluriel:"chambre" }}</li>{% endif %}
+      {% if b.salons %}<li>{{ b.salons|pluriel:"salon" }}</li>{% endif %}
+      {% if b.sanitaires %}<li>{{ b.sanitaires|pluriel:"sanitaire" }}</li>{% endif %}
+      {% if b.superficie %}<li>{{ b.superficie|floatformat:"-1" }} m²</li>{% endif %}
+      {% if b.type_document and b.type_document != "aucun" %}<li>{{ b.get_type_document_display }}</li>{% endif %}
+    </ul>
+  </div>
+</article>

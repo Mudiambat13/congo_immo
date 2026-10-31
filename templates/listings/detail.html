@@ -1,0 +1,158 @@
+{% extends "base.html" %}
+{% load immo l10n %}
+{% block titre %}{{ b.objet }}, {{ b.localisation_courte }} : {{ b.prix_affiche }}{% if b.est_location %} par mois{% endif %} | Congo Immo{% endblock %}
+{% block description %}{{ b.get_type_annonce_display }} à {{ b.localisation_courte }}. {{ b.description|truncatechars:140 }}{% endblock %}
+{% block head %}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{% with c=b.couverture %}{% if c %}<meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{{ c.image.url }}">{% endif %}{% endwith %}
+<meta property="og:title" content="{{ b.objet }}, {{ b.localisation_courte }}">{% endblock %}
+{% block contenu %}
+<div class="conteneur detail">
+  <nav class="fil" aria-label="Fil d'Ariane">
+    <a href="{% url 'listings:accueil' %}">Accueil</a>
+    <a href="{% if b.est_location %}{% url 'listings:louer' %}{% else %}{% url 'listings:acheter' %}{% endif %}">{% if b.est_location %}À louer{% else %}À vendre{% endif %}</a>
+    <a href="{% url 'listings:liste' %}?ville={{ b.ville_id }}">{{ b.ville.nom }}</a>
+  </nav>
+
+  {% if b.statut == "conclu" %}<p class="bandeau bandeau--conclu">Ce bien est déjà {% if b.est_location %}loué{% else %}vendu{% endif %}. Voyez les biens similaires plus bas.</p>{% endif %}
+  {% if b.statut == "retire" or not b.publie %}<p class="bandeau bandeau--retire">Cette annonce n'est visible que par vous{% if not b.publie %} : elle a été masquée par la modération{% endif %}.</p>{% endif %}
+
+  <div class="detail__grille">
+    <div class="detail__principal">
+      <div class="galerie" data-galerie>
+        {% with photos=b.photos.all %}
+        {% if photos %}
+        <a class="galerie__grande" href="{{ photos.0.image.url }}" target="_blank" rel="noopener"><img src="{{ photos.0.image.url }}" alt="{{ b.objet }}, photo 1" data-galerie-grande width="1200" height="800"></a>
+        {% if photos|length > 1 %}
+        <ul class="galerie__vignettes">
+          {% for ph in photos %}
+          <li><button type="button" data-galerie-vignette data-src="{{ ph.image.url }}" aria-label="Voir la photo {{ forloop.counter }}"><img src="{% if ph.miniature %}{{ ph.miniature.url }}{% else %}{{ ph.image.url }}{% endif %}" alt="" loading="lazy" width="160" height="107"></button></li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+        {% else %}<div class="galerie__vide">Pas de photo</div>{% endif %}
+        {% endwith %}
+      </div>
+
+      <header class="detail__tete">
+        <p class="detail__type detail__type--{{ b.type_annonce }}">{{ b.get_type_annonce_display }} <span>{{ b.get_categorie_display }}</span></p>
+        <h1>{{ b.objet }}{% if b.est_verifie %}<svg class="verif" width="26" height="26" role="img" aria-label="Annonce vérifiée"><use href="#i-verif"/></svg>{% endif %}</h1>
+        <p class="detail__lieu"><svg width="18" height="18" aria-hidden="true"><use href="#i-pin"/></svg>{{ b.adresse }}, {{ b.localisation_courte }}, {{ b.ville.province.nom }}</p>
+      </header>
+
+      <section class="bloc" aria-labelledby="t-desc">
+        <h2 id="t-desc">Description</h2>
+        <p class="texte">{{ b.description|linebreaksbr }}</p>
+        <ul class="traits traits--grands">
+          {% if b.chambres %}<li>{{ b.chambres|pluriel:"chambre" }}</li>{% endif %}
+          {% if b.salons %}<li>{{ b.salons|pluriel:"salon" }}</li>{% endif %}
+          {% if b.sanitaires %}<li>{{ b.sanitaires|pluriel:"sanitaire" }}</li>{% endif %}
+          {% if b.superficie %}<li>{{ b.superficie|floatformat:"-1" }} m²</li>{% endif %}
+        </ul>
+        {% if b.equipements.all %}
+        <ul class="chips">{% for e in b.equipements.all %}<li>{{ e.nom }}</li>{% endfor %}</ul>
+        {% endif %}
+      </section>
+
+      {% if b.est_location %}
+      <section class="bloc bloc--conditions" aria-labelledby="t-cond">
+        <h2 id="t-cond">Loyer et garantie</h2>
+        <dl class="donnees">
+          <div><dt>Loyer</dt><dd>{{ b.prix_affiche }} par mois</dd></div>
+          {% if b.garantie_mois is not None %}<div><dt>Garantie</dt><dd>{% if b.garantie_mois %}{{ b.garantie_mois }} mois{% else %}Aucune garantie{% endif %}</dd></div>{% endif %}
+          {% if b.avance_mois %}<div><dt>Avance</dt><dd>{{ b.avance_mois }} mois</dd></div>{% endif %}
+          {% if b.entree_total %}<div class="donnees__fort"><dt>À prévoir à l'entrée</dt><dd>{{ b.entree_total }}</dd></div>{% endif %}
+        </dl>
+        {% if b.modalites %}<p class="texte"><b>Modalités.</b> {{ b.modalites|linebreaksbr }}</p>{% endif %}
+      </section>
+      {% else %}
+      <section class="bloc bloc--conditions" aria-labelledby="t-cond">
+        <h2 id="t-cond">Prix et documents</h2>
+        <dl class="donnees">
+          <div><dt>Prix demandé</dt><dd>{{ b.prix_affiche }}</dd></div>
+          {% if b.superficie %}<div><dt>Superficie</dt><dd>{{ b.superficie|floatformat:"-1" }} m²</dd></div>{% endif %}
+          {% if b.prix_m2 %}<div><dt>Prix au m²</dt><dd>{{ b.prix_m2 }}</dd></div>{% endif %}
+          {% if doc_label %}<div class="donnees__fort"><dt>Document disponible</dt><dd>{{ doc_label }}</dd></div>{% endif %}
+        </dl>
+        <p class="aide">Demandez à voir l'original du document et vérifiez-le auprès de la Conservation des titres immobiliers avant tout paiement.</p>
+      </section>
+      {% endif %}
+
+      {% if marche %}
+      <section class="bloc" aria-labelledby="t-marche">
+        <h2 id="t-marche">Ce prix comparé au marché</h2>
+        <p class="texte">{{ marche.n }} bien{{ marche.n|pluralize:"s" }} comparable{{ marche.n|pluralize:"s" }} {{ marche.n|pluralize:"est,sont" }} en ligne à {{ marche.portee }} : {{ marche.mini }} au minimum, {{ marche.maxi }} au maximum, {{ marche.moyenne }} en moyenne.
+        {% if marche.ecart is not None %}Ce bien est {% if marche.ecart > 5 %}<b>{{ marche.ecart }} % au-dessus</b> de la moyenne.{% elif marche.ecart < -5 %}<b>{{ marche.ecart|cut:"-" }} % en dessous</b> de la moyenne.{% else %}<b>dans la moyenne</b>.{% endif %}{% endif %}</p>
+      </section>
+      {% endif %}
+
+      <section class="bloc" aria-labelledby="t-carte">
+        <h2 id="t-carte">Localisation</h2>
+        {% if b.a_gps %}
+        {% localize off %}<div id="carte-bien" class="carte" data-lat="{{ b.latitude }}" data-lng="{{ b.longitude }}" data-titre="{{ b.objet }}" role="region" aria-label="Position du bien sur la carte"></div>{% endlocalize %}
+        <p class="aide"><a href="https://www.google.com/maps/dir/?api=1&destination={% localize off %}{{ b.latitude }},{{ b.longitude }}{% endlocalize %}" target="_blank" rel="noopener">Obtenir l'itinéraire dans Google Maps</a></p>
+        {% else %}
+        <p class="texte">{{ b.adresse }}, {{ b.localisation_courte }}. Le propriétaire n'a pas indiqué de position GPS : demandez le point exact au contact.</p>
+        {% endif %}
+      </section>
+    </div>
+
+    <aside class="detail__lateral">
+      <div class="contact">
+        <p class="contact__prix">{{ b.prix_affiche }}{% if b.est_location %}<small>par mois</small>{% endif %}</p>
+        {% if b.entree_total %}<p class="contact__entree">{{ b.entree_total }} à l'entrée</p>{% endif %}
+        {% if b.statut == "disponible" %}
+        <a class="bouton bouton--whatsapp bouton--bloc" href="{% url 'listings:contact' b.reference 'whatsapp' %}" target="_blank" rel="noopener"><svg width="22" height="22" aria-hidden="true"><use href="#i-whatsapp"/></svg>Écrire sur WhatsApp</a>
+        <a class="bouton bouton--contour bouton--bloc" href="tel:+{{ b.proprietaire.telephone }}" data-appel="{% url 'listings:contact' b.reference 'appel' %}"><svg width="20" height="20" aria-hidden="true"><use href="#i-tel"/></svg>Appeler {{ b.proprietaire.telephone_affiche }}</a>
+        {% endif %}
+        <div class="contact__annonceur">
+          <p><a href="{% url 'listings:profil_public' b.proprietaire_id %}"><b>{{ b.proprietaire.nom_affiche }}</b></a>{% if b.proprietaire.est_verifie %}<svg class="verif" width="18" height="18" role="img" aria-label="Identité vérifiée"><use href="#i-verif"/></svg>{% endif %}</p>
+          <p class="aide">{{ b.proprietaire.get_role_display }}, membre depuis {{ b.proprietaire.date_joined|date:"F Y" }}</p>
+        </div>
+        <ul class="contact__outils">
+          <li>
+            {% if user.is_authenticated %}
+            <form method="post" action="{% url 'listings:favori' b.reference %}">{% csrf_token %}
+              <button type="submit" data-favori class="lien-icone favori{% if b.pk in favoris_ids %} is-on{% endif %}" aria-pressed="{% if b.pk in favoris_ids %}true{% else %}false{% endif %}"><svg width="20" height="20"><use href="#i-coeur"/></svg><span>Favori</span></button>
+            </form>
+            {% else %}<a class="lien-icone favori" href="{% url 'accounts:connexion' %}?next={{ request.path|urlencode }}"><svg width="20" height="20"><use href="#i-coeur"/></svg><span>Favori</span></a>{% endif %}
+          </li>
+          <li><a class="lien-icone" target="_blank" rel="noopener" href="https://wa.me/?text={{ b.objet|urlencode:'' }}%20{{ request.build_absolute_uri|urlencode:'' }}"><svg width="20" height="20" aria-hidden="true"><use href="#i-whatsapp"/></svg><span>Partager</span></a></li>
+          <li><button type="button" class="lien-icone" data-copier="{{ request.build_absolute_uri }}"><span>Copier le lien</span></button></li>
+        </ul>
+        <p class="aide contact__ref">Référence {{ b.reference }}. Publiée le {{ b.cree_le|date:"j F Y" }}. {{ b.vues|pluriel:"vue" }}.</p>
+      </div>
+
+      {% if est_proprio %}
+      <div class="contact contact--proprio">
+        <p class="contact__titre">Gérer cette annonce</p>
+        <a class="bouton bouton--bloc" href="{% url 'listings:affiche' b.reference %}" target="_blank">Imprimer l'affiche avec QR code</a>
+        <a class="bouton bouton--contour bouton--bloc" href="{% url 'listings:modifier' b.reference %}">Modifier</a>
+        <form method="post" action="{% url 'listings:statut' b.reference %}">{% csrf_token %}<input type="hidden" name="next" value="{{ b.get_absolute_url }}">
+          {% if b.statut == "disponible" %}
+          <button class="bouton bouton--contour bouton--bloc" name="statut" value="conclu">Marquer comme {% if b.est_location %}loué{% else %}vendu{% endif %}</button>
+          {% else %}
+          <button class="bouton bouton--contour bouton--bloc" name="statut" value="disponible">Remettre en ligne</button>
+          {% endif %}
+        </form>
+      </div>
+      {% endif %}
+
+      <details class="signaler">
+        <summary>Signaler cette annonce</summary>
+        <form method="post" action="{% url 'listings:signaler' b.reference %}">{% csrf_token %}
+          {{ form_signal.as_p }}
+          <button class="bouton bouton--contour" type="submit">Envoyer le signalement</button>
+        </form>
+      </details>
+    </aside>
+  </div>
+
+  {% if similaires %}
+  <section class="section section--serree">
+    <h2 class="section__titre">Autres biens {% if b.est_location %}à louer{% else %}à vendre{% endif %} à {{ b.ville.nom }}</h2>
+    <div class="grille">{% for b in similaires %}{% include "listings/_fiche.html" %}{% endfor %}</div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}
+{% block scripts %}<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>{% endblock %}

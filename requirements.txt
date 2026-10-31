@@ -1,0 +1,8 @@
+Django>=5.2
+Pillow>=10.0
+segno>=1.6
+whitenoise>=6.6
+gunicorn>=22.0
+dj-database-url>=2.1
+# Production PostgreSQL (optionnel) :
+# psycopg[binary]>=3.1

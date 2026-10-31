@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% load static l10n %}
+{% block titre %}{% if mode == "creation" %}Publier un bien{% else %}Modifier « {{ bien.objet }} »{% endif %} | Congo Immo{% endblock %}
+{% block head %}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">{% endblock %}
+{% block contenu %}
+<div class="conteneur formulaire-page">
+  <h1>{% if mode == "creation" %}Publier un bien{% else %}Modifier l'annonce {{ bien.reference }}{% endif %}</h1>
+  <p class="intro">Les champs marqués d'une étoile sont obligatoires. Plus l'annonce est précise, plus vous recevrez de contacts sérieux.</p>
+
+  {% if form.errors %}
+  <div class="erreurs" role="alert">
+    <p><b>L'annonce n'est pas encore enregistrée.</b> Corrigez les champs signalés en rouge.</p>
+    {% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}
+  </div>
+  {% endif %}
+
+  <form method="post" enctype="multipart/form-data" class="formulaire" data-formulaire-bien novalidate>
+    {% csrf_token %}
+
+    <fieldset class="etape">
+      <legend><span class="etape__num">1</span>Que publiez-vous ?</legend>
+      <div class="choix-grand">
+        {% for r in form.type_annonce %}<label class="choix">{{ r.tag }}<span><b>{{ r.choice_label }}</b></span></label>{% endfor %}
+      </div>
+    </fieldset>
+
+    <fieldset class="etape">
+      <legend><span class="etape__num">2</span>Le bien</legend>
+      <div class="deux">
+        {% include "listings/_champ.html" with champ=form.categorie %}
+        {% include "listings/_champ.html" with champ=form.objet %}
+      </div>
+      {% include "listings/_champ.html" with champ=form.description %}
+      <div class="trois" data-logement>
+        {% include "listings/_champ.html" with champ=form.chambres %}
+        {% include "listings/_champ.html" with champ=form.salons %}
+        {% include "listings/_champ.html" with champ=form.sanitaires %}
+      </div>
+      <div class="champ">
+        <p class="champ__titre">Équipements disponibles</p>
+        <div class="chips-choix">
+          {% for cb in form.equipements %}<label class="chip-choix">{{ cb.tag }}<span>{{ cb.choice_label }}</span></label>{% endfor %}
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="etape">
+      <legend><span class="etape__num">3</span>Où se trouve le bien ?</legend>
+      <div class="trois">
+        {% include "listings/_champ.html" with champ=form.province %}
+        {% include "listings/_champ.html" with champ=form.ville %}
+        {% include "listings/_champ.html" with champ=form.quartier_nom %}
+      </div>
+      <datalist id="liste-quartiers"></datalist>
+      {% include "listings/_champ.html" with champ=form.adresse %}
+      <div class="champ">
+        <p class="champ__titre">Position GPS <span class="aide-inline" data-gps-obligatoire>(obligatoire pour une vente, conseillée pour une location)</span></p>
+        <p class="aide">Cliquez sur la carte à l'emplacement exact du bien, ou utilisez votre position si vous êtes sur place. Vous pouvez déplacer le repère.</p>
+        <div class="carte-outils">
+          <button type="button" class="bouton bouton--contour bouton--petit" data-ma-position>Utiliser ma position</button>
+          <button type="button" class="bouton bouton--contour bouton--petit" data-effacer-position>Effacer le point</button>
+        </div>
+        {% localize off %}<div id="carte-formulaire" class="carte"></div>{% endlocalize %}
+        <div class="deux deux--serre">
+          {% include "listings/_champ.html" with champ=form.latitude %}
+          {% include "listings/_champ.html" with champ=form.longitude %}
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="etape">
+      <legend><span class="etape__num">4</span><span data-titre-conditions>Loyer et garantie</span></legend>
+      <div class="deux">
+        {% include "listings/_champ.html" with champ=form.prix %}
+        {% include "listings/_champ.html" with champ=form.devise %}
+      </div>
+      <div data-only="location">
+        <div class="deux">
+          {% include "listings/_champ.html" with champ=form.garantie_mois %}
+          {% include "listings/_champ.html" with champ=form.avance_mois %}
+        </div>
+        {% include "listings/_champ.html" with champ=form.modalites %}
+      </div>
+      <div data-only="vente" hidden>
+        <div class="deux">
+          {% include "listings/_champ.html" with champ=form.superficie %}
+          {% include "listings/_champ.html" with champ=form.type_document %}
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset class="etape">
+      <legend><span class="etape__num">5</span>Photos <span class="aide-inline">(1 à {{ MAX_PHOTOS }})</span></legend>
+      {% if mode == "edition" and bien.photos.all %}
+      <div class="photos-existantes">
+        <p class="champ__titre">Photos actuelles : cochez pour retirer</p>
+        <ul class="photos-grille">
+          {% for ph in bien.photos.all %}
+          <li><label><img src="{% if ph.miniature %}{{ ph.miniature.url }}{% else %}{{ ph.image.url }}{% endif %}" alt="Photo {{ forloop.counter }}" width="160" height="107"><span><input type="checkbox" name="photos_a_supprimer" value="{{ ph.pk }}" data-photo-existante> Retirer</span></label></li>
+          {% endfor %}
+        </ul>
+      </div>
+      {% endif %}
+      <div class="champ{% if form.photos_nouvelles.errors %} champ--erreur{% endif %}">
+        <label for="{{ form.photos_nouvelles.id_for_label }}">{% if mode == "edition" %}Ajouter des photos{% else %}Choisir les photos{% endif %}</label>
+        {{ form.photos_nouvelles }}
+        <p class="aide">Façade, salon, chambres, sanitaire, cour. Les photos sont compressées automatiquement pour charger vite sur mobile. Maximum {{ MAX_PHOTOS }} photos de 8 Mo.</p>
+        {% for e in form.photos_nouvelles.errors %}<p class="erreur">{{ e }}</p>{% endfor %}
+        <p class="compteur-photos" data-compteur-photos data-max="{{ MAX_PHOTOS }}" data-existantes="{% if bien %}{{ bien.photos.count }}{% else %}0{% endif %}" aria-live="polite"></p>
+        <ul class="photos-grille photos-grille--apercu" data-apercu></ul>
+      </div>
+    </fieldset>
+
+    <div class="formulaire__actions">
+      <button class="bouton bouton--grand" type="submit">{% if mode == "creation" %}Publier l'annonce{% else %}Enregistrer les modifications{% endif %}</button>
+      <a class="lien-fort" href="{% if mode == 'edition' %}{{ bien.get_absolute_url }}{% else %}{% url 'listings:accueil' %}{% endif %}">Annuler</a>
+      {% if mode == "edition" %}<a class="lien-danger" href="{% url 'listings:supprimer' bien.reference %}">Supprimer l'annonce</a>{% endif %}
+    </div>
+  </form>
+</div>
+{% endblock %}
+{% block scripts %}<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>{% endblock %}

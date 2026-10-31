@@ -1,0 +1,105 @@
+{% extends "base.html" %}
+{% load immo %}
+{% block contenu %}
+<section class="heros mur">
+  <div class="conteneur heros__grille">
+    <div class="heros__texte">
+      <h1>Un toit, une parcelle, un local. Partout en RDC.</h1>
+      <p class="heros__sous">Des annonces avec photos, position GPS et conditions claires : loyer, garantie, superficie, documents.</p>
+    </div>
+    <div class="enseigne" aria-hidden="true">
+      <span class="enseigne__mot">À louer</span>
+      <span class="enseigne__ligne">2 chambres, salon, sanitaire</span>
+      <span class="enseigne__ligne">Av. Tulipier n°2, Bel-Air</span>
+      <span class="enseigne__ligne">Lubumbashi</span>
+      <span class="enseigne__tel">Garantie 3 mois</span>
+    </div>
+  </div>
+</section>
+
+<section class="conteneur recherche-zone">
+  <form class="recherche" action="{% url 'listings:liste' %}" method="get" role="search">
+    <fieldset class="bascule">
+      <legend class="sr-only">Type d'annonce</legend>
+      <label><input type="radio" name="type" value="location" checked><span>À louer</span></label>
+      <label><input type="radio" name="type" value="vente"><span>À vendre</span></label>
+    </fieldset>
+    <div class="recherche__champs">
+      <label>Ville
+        <select name="ville">
+          <option value="">Toute la RDC</option>
+          {% for pr in provinces %}{% if pr.villes.all %}
+          <optgroup label="{{ pr.nom }}">{% for v in pr.villes.all %}<option value="{{ v.id }}">{{ v.nom }}</option>{% endfor %}</optgroup>
+          {% endif %}{% endfor %}
+        </select>
+      </label>
+      <label>Type de bien
+        <select name="categorie">
+          <option value="">Tous les types</option>
+          {% for val, lib in categories %}<option value="{{ val }}">{{ lib }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Budget maximum (USD)
+        <input type="number" name="prix_max" min="0" inputmode="numeric" placeholder="ex. 500">
+      </label>
+      <button class="bouton bouton--grand" type="submit">Rechercher</button>
+    </div>
+  </form>
+</section>
+
+{% if villes_populaires %}
+<section class="conteneur section section--serree">
+  <h2 class="section__titre">Chercher par ville</h2>
+  <ul class="pastilles">
+    {% for v in villes_populaires %}
+    <li><a href="{% url 'listings:liste' %}?ville={{ v.id }}">{{ v.nom }} <span>{{ v.n }}</span></a></li>
+    {% endfor %}
+  </ul>
+</section>
+{% endif %}
+
+<section class="conteneur section">
+  <div class="section__tete">
+    <h2 class="section__titre">Dernières annonces à louer</h2>
+    <a class="lien-fort" href="{% url 'listings:louer' %}">Voir tous les biens à louer</a>
+  </div>
+  {% if a_louer %}
+  <div class="grille">{% for b in a_louer %}{% include "listings/_fiche.html" %}{% endfor %}</div>
+  {% else %}
+  <p class="vide">Aucun bien à louer pour le moment. <a href="{% url 'listings:creer' %}?type=location">Publiez le premier.</a></p>
+  {% endif %}
+</section>
+
+<section class="bande-proprio">
+  <div class="conteneur">
+    <h2>Vous avez un bien à louer ou à vendre ?</h2>
+    <ol class="etapes">
+      <li><b>Créez votre compte.</b> Un numéro de téléphone suffit.</li>
+      <li><b>Décrivez le bien.</b> Jusqu'à {{ MAX_PHOTOS }} photos, le loyer, la garantie, le quartier et la position GPS.</li>
+      <li><b>Imprimez l'affiche.</b> Collez-la sur le portail : le QR code ouvre votre annonce.</li>
+    </ol>
+    <a class="bouton bouton--soleil bouton--grand" href="{% url 'listings:creer' %}">Publier un bien gratuitement</a>
+  </div>
+</section>
+
+<section class="conteneur section">
+  <div class="section__tete">
+    <h2 class="section__titre">Dernières annonces à vendre</h2>
+    <a class="lien-fort" href="{% url 'listings:acheter' %}">Voir tous les biens à vendre</a>
+  </div>
+  {% if a_vendre %}
+  <div class="grille">{% for b in a_vendre %}{% include "listings/_fiche.html" %}{% endfor %}</div>
+  {% else %}
+  <p class="vide">Aucun bien à vendre pour le moment. <a href="{% url 'listings:creer' %}?type=vente">Publiez le premier.</a></p>
+  {% endif %}
+</section>
+
+<section class="conteneur section section--serree">
+  <div class="alerte-bloc">
+    <h2>Avant de payer, vérifiez.</h2>
+    <p>Visitez le bien, demandez les documents et ne versez jamais de garantie à distance. Chaque annonce a un bouton « Signaler » : notre équipe vérifie.</p>
+    <a class="lien-fort" href="{% url 'listings:conseils' %}">Lire les conseils de sécurité</a>
+  </div>
+  <p class="chiffres">{{ nb_biens }} annonce{{ nb_biens|pluralize }} dans {{ nb_villes }} ville{{ nb_villes|pluralize }}, publiée{{ nb_proprietaires|pluralize }} par {{ nb_proprietaires }} annonceur{{ nb_proprietaires|pluralize }}.</p>
+</section>
+{% endblock %}

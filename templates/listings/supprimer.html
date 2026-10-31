@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+{% block titre %}Supprimer l'annonce | Congo Immo{% endblock %}
+{% block contenu %}
+<section class="conteneur page-simple">
+  <h1>Supprimer « {{ b.objet }} » ?</h1>
+  <p>L'annonce {{ b.reference }} et ses photos seront effacées définitivement. Si le bien est simplement loué ou vendu, utilisez plutôt « Marquer comme {% if b.est_location %}loué{% else %}vendu{% endif %} ».</p>
+  <form method="post" class="ligne-boutons">{% csrf_token %}
+    <button class="bouton bouton--danger" type="submit">Supprimer définitivement</button>
+    <a class="bouton bouton--contour" href="{{ b.get_absolute_url }}">Garder l'annonce</a>
+  </form>
+</section>
+{% endblock %}

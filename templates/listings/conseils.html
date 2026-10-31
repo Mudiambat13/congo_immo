@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block titre %}Éviter les arnaques immobilières | Congo Immo{% endblock %}
+{% block contenu %}
+<article class="conteneur page-simple page-texte">
+  <h1>Louer ou acheter sans se faire piéger</h1>
+  <p>Ces réflexes protègent votre argent. Ils valent pour toutes les annonces, y compris celles de Congo Immo.</p>
+
+  <h2>Pour les locataires</h2>
+  <ul>
+    <li>Visitez toujours le bien avant de payer quoi que ce soit.</li>
+    <li>Comparez le loyer au prix du quartier : la fiche de chaque annonce indique la moyenne locale.</li>
+    <li>Exigez un contrat écrit qui mentionne le loyer, la garantie et la durée.</li>
+    <li>Payez la garantie en présence du propriétaire et gardez un reçu signé.</li>
+    <li>Vérifiez que la personne qui vous reçoit est bien le propriétaire ou son mandataire.</li>
+  </ul>
+
+  <h2>Pour les acheteurs</h2>
+  <ul>
+    <li>Demandez l'original du titre : certificat d'enregistrement, contrat de location ou acte de vente.</li>
+    <li>Faites vérifier le titre à la Conservation des titres immobiliers avant tout paiement.</li>
+    <li>Faites tracer les limites de la parcelle par un géomètre ou le service du cadastre.</li>
+    <li>Passez par un notaire pour l'acte de vente et ne payez pas en liquide sans reçu.</li>
+  </ul>
+
+  <h2>Pour les propriétaires</h2>
+  <ul>
+    <li>Imprimez l'affiche avec QR code depuis votre annonce et collez-la sur le bien : personne ne peut la détourner pour une autre adresse.</li>
+    <li>Marquez le bien comme loué ou vendu dès que c'est fait, pour éviter les appels inutiles.</li>
+  </ul>
+
+  <h2>Un doute sur une annonce ?</h2>
+  <p>Utilisez « Signaler cette annonce » sur sa page. Les annonces suspectes sont masquées pendant la vérification.</p>
+  <p><a class="bouton" href="{% url 'listings:liste' %}">Voir les annonces</a></p>
+</article>
+{% endblock %}

@@ -1,0 +1,58 @@
+{% load immo %}<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Affiche {{ b.reference }}</title>
+  <style>
+    @page { size: A4 portrait; margin: 0; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #e9ece8; font-family: "Hanken Grotesk", system-ui, sans-serif; color: #13201A; }
+    .barre { padding: 12px 16px; display: flex; gap: 12px; align-items: center; justify-content: center; font-size: 15px; }
+    .barre button { font: inherit; font-weight: 700; padding: 10px 18px; border: 0; border-radius: 6px; background: #0E3B2C; color: #fff; cursor: pointer; }
+    .feuille { width: 210mm; min-height: 297mm; margin: 0 auto 24px; background: #fff; padding: 14mm; display: flex; flex-direction: column; gap: 8mm; }
+    .panneau { background: #F4B400; border: 3mm solid #13201A; padding: 10mm 8mm; text-align: center; }
+    .panneau__mot { display: block; font-size: 30mm; line-height: .95; font-weight: 800; color: #CE1126; font-stretch: 75%; letter-spacing: .01em; text-transform: uppercase; }
+    .panneau__objet { display: block; margin-top: 4mm; font-size: 11mm; font-weight: 800; }
+    .grand-prix { text-align: center; font-size: 18mm; font-weight: 800; line-height: 1; }
+    .grand-prix small { display: block; font-size: 6mm; font-weight: 600; margin-top: 2mm; color: #4a5a51; }
+    .infos { display: grid; grid-template-columns: 1fr 1fr; gap: 3mm 8mm; font-size: 6.2mm; }
+    .infos div { border-bottom: .3mm solid #cfd8d1; padding-bottom: 2mm; }
+    .infos b { display: block; font-size: 4mm; font-weight: 600; color: #5b6b62; }
+    .bas { margin-top: auto; display: grid; grid-template-columns: 1fr 52mm; gap: 8mm; align-items: center; border-top: 1mm solid #13201A; padding-top: 8mm; }
+    .bas p { margin: 0 0 3mm; font-size: 6mm; }
+    .tel { font-size: 11mm; font-weight: 800; }
+    .qr svg { width: 52mm; height: 52mm; display: block; }
+    .qr small { display: block; text-align: center; font-size: 3.6mm; margin-top: 1mm; }
+    @media print { body { background: #fff; } .barre { display: none; } .feuille { margin: 0; } }
+  </style>
+</head>
+<body>
+  <div class="barre"><button onclick="window.print()">Imprimer l'affiche</button><span>Format A4. Collez-la sur le portail ou le mur du bien.</span></div>
+  <div class="feuille">
+    <div class="panneau">
+      <span class="panneau__mot">{{ b.get_type_annonce_display }}</span>
+      <span class="panneau__objet">{{ b.objet }}</span>
+    </div>
+    <p class="grand-prix">{{ b.prix_affiche }}{% if b.est_location %}<small>par mois{% if b.garantie_mois %}, garantie {{ b.garantie_mois }} mois{% endif %}</small>{% endif %}</p>
+    <div class="infos">
+      <div><b>Quartier</b>{{ b.localisation_courte }}</div>
+      <div><b>Adresse</b>{{ b.adresse }}</div>
+      {% if b.chambres %}<div><b>Chambres</b>{{ b.chambres }}</div>{% endif %}
+      {% if b.salons %}<div><b>Salons</b>{{ b.salons }}</div>{% endif %}
+      {% if b.sanitaires %}<div><b>Sanitaires</b>{{ b.sanitaires }}</div>{% endif %}
+      {% if b.superficie %}<div><b>Superficie</b>{{ b.superficie|floatformat:"-1" }} m²</div>{% endif %}
+      {% if b.type_document %}<div><b>Document</b>{{ b.get_type_document_display }}</div>{% endif %}
+    </div>
+    <div class="bas">
+      <div>
+        <p>Contact</p>
+        <p class="tel">{{ b.proprietaire.telephone_affiche }}</p>
+        <p>{{ b.proprietaire.nom_affiche }}</p>
+        <p>Photos, carte et conditions sur Congo Immo.<br>Réf. {{ b.reference }}</p>
+      </div>
+      <div class="qr">{{ qr|safe }}<small>Scannez pour voir l'annonce</small></div>
+    </div>
+  </div>
+</body>
+</html>

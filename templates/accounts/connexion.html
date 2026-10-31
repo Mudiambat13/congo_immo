@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block titre %}Connexion | Congo Immo{% endblock %}
+{% block contenu %}
+<section class="conteneur page-simple page-compte">
+  <h1>Connexion</h1>
+  <form method="post" class="formulaire formulaire--etroit" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ next }}">
+    {% if form.non_field_errors %}<div class="erreurs" role="alert">{% for e in form.non_field_errors %}<p>{{ e }}</p>{% endfor %}</div>{% endif %}
+    {% for champ in form %}
+      <div class="champ{% if champ.errors %} champ--erreur{% endif %}">
+        <label for="{{ champ.id_for_label }}">{{ champ.label }}</label>{{ champ }}
+        {% for e in champ.errors %}<p class="erreur">{{ e }}</p>{% endfor %}
+      </div>
+    {% endfor %}
+    <button class="bouton bouton--grand bouton--bloc" type="submit">Se connecter</button>
+  </form>
+  <p class="aide">Pas encore de compte ? <a href="{% url 'accounts:inscription' %}">Créez-le en une minute</a>.</p>
+</section>
+{% endblock %}

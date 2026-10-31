@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block titre %}{{ agent.nom_affiche }} : annonces | Congo Immo{% endblock %}
+{% block contenu %}
+<div class="conteneur section section--haut">
+  <header class="agent">
+    <h1>{{ agent.nom_affiche }}{% if agent.est_verifie %}<svg class="verif" width="26" height="26" role="img" aria-label="Identité vérifiée"><use href="#i-verif"/></svg>{% endif %}</h1>
+    <p class="aide">{{ agent.get_role_display }}, membre depuis {{ agent.date_joined|date:"F Y" }}</p>
+    {% if agent.bio %}<p class="texte">{{ agent.bio }}</p>{% endif %}
+  </header>
+  {% if biens %}
+  <div class="grille">{% for b in biens %}{% include "listings/_fiche.html" %}{% endfor %}</div>
+  {% else %}<p class="vide">Aucune annonce disponible pour le moment.</p>{% endif %}
+</div>
+{% endblock %}
