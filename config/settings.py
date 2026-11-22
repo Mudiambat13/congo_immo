@@ -18,6 +18,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     "django.contrib.humanize",
+    "django.contrib.sitemaps",
     "accounts",
     "listings",
 ]
@@ -106,3 +107,7 @@ if not DEBUG:
 SITE_NOM = "Congo Immo"
 MAX_PHOTOS = 6
 MAX_TAILLE_PHOTO_MO = 8
+
+# E-mails (alertes, demandes de visite). Console en développement ; configurez SMTP en production.
+EMAIL_BACKEND = os.environ.get("EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+ALERTES_EMAIL = os.environ.get("ALERTES_EMAIL", "0") == "1"

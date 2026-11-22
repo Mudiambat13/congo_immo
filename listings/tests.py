@@ -245,3 +245,241 @@ class TestComptes(Base):
         })
         self.assertEqual(r.status_code, 200)
         self.assertIn("telephone", r.context["form"].errors)
+
+
+# ======================= v2 =======================
+from datetime import date, timedelta  # noqa: E402
+
+from django.core.cache import cache  # noqa: E402
+from django.utils import timezone  # noqa: E402
+
+from listings.models import AlerteRecherche, DemandeVisite, Favori, Notification, Signalement, prix_court  # noqa: E402
+from listings.nlp import analyser_recherche  # noqa: E402
+
+
+def png_a_bandes(nom):
+    """Image avec assez de contraste pour avoir une empreinte perceptuelle exploitable."""
+    from PIL import ImageDraw
+    im = Image.new("RGB", (450, 300), "#888")
+    d = ImageDraw.Draw(im)
+    for k, lum in enumerate([200, 50, 180, 60, 220, 30, 160, 90, 140]):
+        d.rectangle([k * 50, 0, k * 50 + 49, 300], fill=(lum, lum, lum))
+    buf = io.BytesIO()
+    im.save(buf, "PNG")
+    return SimpleUploadedFile(nom, buf.getvalue(), content_type="image/png")
+
+
+class TestPrixEtConfiance(Base):
+    def test_baisse_de_prix_historique_et_notification(self):
+        b = self.creer_bien(prix=Decimal("400"))
+        Favori.objects.create(utilisateur=self.autre, bien=b)
+        b.prix = Decimal("360")
+        b.save()
+        b.refresh_from_db()
+        self.assertEqual(b.baisse_pct, 10)
+        self.assertEqual(b.historique_prix.count(), 1)
+        self.assertTrue(Notification.objects.filter(utilisateur=self.autre, type="baisse", bien=b).exists())
+        b.prix = Decimal("500")
+        b.save()
+        b.refresh_from_db()
+        self.assertIsNone(b.baisse_pct)
+
+    def test_indice_de_confiance(self):
+        b = self.creer_bien()
+        avant = b.confiance()["score"]
+        b.latitude, b.longitude = Decimal("-11.67"), Decimal("27.49")
+        b.save()
+        apres = Bien.objects.get(pk=b.pk).confiance()
+        self.assertEqual(apres["score"] - avant, 15)
+        self.assertTrue(any(c["libelle"] == "Position GPS" and c["ok"] for c in apres["criteres"]))
+
+    def test_prix_court(self):
+        self.assertEqual(prix_court(350, "USD"), "350 $")
+        self.assertEqual(prix_court(25000, "USD"), "25 k $")
+        self.assertEqual(prix_court(1500000, "CDF"), "1.5 M FC")
+
+    def test_photos_dupliquees_signalees_aux_moderateurs(self):
+        champs = dict(type_annonce="location", categorie="maison", objet="X", description="d", ville=self.lubumbashi, adresse="Av. 1", prix=Decimal("100"), garantie_mois=1)
+        a = Bien.objects.create(proprietaire=self.user, **champs)
+        PhotoBien.objects.create(bien=a, image=png_a_bandes("a.png"))
+        self.assertFalse(a.detecter_photos_dupliquees())  # première annonce : rien d'autre à comparer
+        b = Bien.objects.create(proprietaire=self.autre, **champs)
+        PhotoBien.objects.create(bien=b, image=png_a_bandes("b.png"))
+        self.assertTrue(b.photos.first().empreinte)
+        self.assertTrue(b.detecter_photos_dupliquees())
+        self.assertEqual(Signalement.objects.filter(bien=b, motif="photos", auteur__isnull=True).count(), 1)
+        b.detecter_photos_dupliquees()
+        self.assertEqual(Signalement.objects.filter(bien=b, motif="photos").count(), 1)  # pas de doublon de signalement
+
+
+class TestVisites(Base):
+    def setUp(self):
+        cache.clear()
+
+    def donnees(self, **kw):
+        d = {"nom": "Jean", "telephone": "0991234567", "date_souhaitee": (date.today() + timedelta(days=2)).isoformat(), "creneau": "matin", "message": ""}
+        d.update(kw)
+        return d
+
+    def test_demande_puis_confirmation(self):
+        b = self.creer_bien()
+        r = self.client.post(reverse("listings:visite", args=[b.reference]), self.donnees())
+        self.assertEqual(r.status_code, 302)
+        v = DemandeVisite.objects.get()
+        self.assertEqual(v.telephone, "243991234567")
+        self.assertTrue(Notification.objects.filter(utilisateur=self.user, type="visite").exists())
+        self.client.force_login(self.autre)
+        self.client.post(reverse("listings:statut_visite", args=[v.pk]), {"statut": "confirmee"})
+        v.refresh_from_db()
+        self.assertEqual(v.statut, "attente")  # un autre compte ne peut pas répondre
+        self.client.force_login(self.user)
+        self.assertContains(self.client.get(reverse("listings:visites")), "Jean")
+        self.client.post(reverse("listings:statut_visite", args=[v.pk]), {"statut": "confirmee"})
+        v.refresh_from_db()
+        self.assertEqual(v.statut, "confirmee")
+        self.assertIn("wa.me/243991234567", v.lien_whatsapp)
+
+    def test_refus_date_passee_et_robot(self):
+        b = self.creer_bien()
+        url = reverse("listings:visite", args=[b.reference])
+        self.assertEqual(self.client.post(url, self.donnees(date_souhaitee=(date.today() - timedelta(days=1)).isoformat())).status_code, 200)
+        self.assertEqual(self.client.post(url, {**self.donnees(), "site_web": "http://spam"}).status_code, 200)
+        self.assertEqual(self.client.post(url, self.donnees(telephone="abc")).status_code, 200)
+        self.assertEqual(DemandeVisite.objects.count(), 0)
+
+    def test_limite_de_5_demandes_par_heure(self):
+        b = self.creer_bien()
+        url = reverse("listings:visite", args=[b.reference])
+        for _ in range(7):
+            self.client.post(url, self.donnees())
+        self.assertEqual(DemandeVisite.objects.count(), 5)
+
+    def test_visite_impossible_si_bien_loue(self):
+        b = self.creer_bien(statut="conclu")
+        self.assertEqual(self.client.post(reverse("listings:visite", args=[b.reference]), self.donnees()).status_code, 404)
+
+
+class TestComparateurEtAlertes(Base):
+    def test_comparateur_limite_a_trois(self):
+        biens = [self.creer_bien(prix=Decimal(p)) for p in (200, 300, 400, 500)]
+        for b in biens[:3]:
+            r = self.client.post(reverse("listings:basculer_comparaison", args=[b.reference]), HTTP_X_REQUESTED_WITH="fetch")
+            self.assertTrue(r.json()["actif"])
+        r = self.client.post(reverse("listings:basculer_comparaison", args=[biens[3].reference]), HTTP_X_REQUESTED_WITH="fetch")
+        self.assertEqual(r.status_code, 409)
+        page = self.client.get(reverse("listings:comparer"))
+        self.assertContains(page, "Le moins cher")
+        r = self.client.post(reverse("listings:basculer_comparaison", args=[biens[0].reference]), HTTP_X_REQUESTED_WITH="fetch")
+        self.assertFalse(r.json()["actif"])
+
+    def test_alerte_prevenue_a_la_publication(self):
+        self.client.force_login(self.autre)
+        self.client.post(reverse("listings:sauvegarder_recherche"), {"parametres": f"type=location&ville={self.lubumbashi.pk}&prix_max=500&page=2&vue=carte"})
+        a = AlerteRecherche.objects.get()
+        self.assertNotIn("page", a.parametres)
+        self.assertNotIn("vue", a.parametres)
+        self.assertIn("À louer", a.resume)
+        self.client.force_login(self.user)
+        self.client.post(reverse("listings:creer"), {**self.donnees_location(prix="300"), "photos_nouvelles": [png()]})
+        self.assertEqual(Notification.objects.filter(utilisateur=self.autre, type="alerte").count(), 1)
+        self.client.post(reverse("listings:creer"), {**self.donnees_location(prix="900", objet="Villa"), "photos_nouvelles": [png()]})
+        self.assertEqual(Notification.objects.filter(utilisateur=self.autre, type="alerte").count(), 1)  # trop cher : pas d'alerte
+
+    def test_alerte_sans_critere_refusee_et_pause(self):
+        self.client.force_login(self.autre)
+        self.client.post(reverse("listings:sauvegarder_recherche"), {"parametres": "page=2"})
+        self.assertEqual(AlerteRecherche.objects.count(), 0)
+        self.client.post(reverse("listings:sauvegarder_recherche"), {"parametres": "type=vente"})
+        a = AlerteRecherche.objects.get()
+        self.client.post(reverse("listings:action_alerte", args=[a.pk]), {"action": "basculer"})
+        a.refresh_from_db()
+        self.assertFalse(a.active)
+        self.assertContains(self.client.get(reverse("listings:alertes")), "À vendre")
+
+    def test_notifications_marquees_lues(self):
+        Notification.objects.create(utilisateur=self.user, type="alerte", titre="Test")
+        self.client.force_login(self.user)
+        self.assertContains(self.client.get(reverse("listings:notifications")), "Test")
+        self.assertEqual(Notification.objects.filter(utilisateur=self.user, lu=False).count(), 0)
+
+    def test_redirection_externe_refusee(self):
+        b = self.creer_bien()
+        self.client.force_login(self.autre)
+        r = self.client.post(reverse("listings:favori", args=[b.reference]), {"next": "https://evil.example/piege"})
+        self.assertNotIn("evil.example", r["Location"])
+
+
+class TestRechercheEtGeo(Base):
+    def test_phrase_complete(self):
+        p, resume = analyser_recherche("Maison 3 chambres à Lubumbashi quartier Golf moins de 500$ à louer")
+        self.assertEqual(p["type"], "location")
+        self.assertEqual(p["categorie"], "maison")
+        self.assertEqual(p["chambres"], "3")
+        self.assertEqual(p["ville"], str(self.lubumbashi.pk))
+        self.assertEqual(p["quartier"], "Golf")
+        self.assertEqual((p["prix_max"], p["devise"]), ("500", "USD"))
+        self.assertIn("À louer", resume)
+
+    def test_phrase_fourchette_et_vente(self):
+        p, _ = analyser_recherche("parcelle à vendre à Kolwezi entre 10 000 et 30000 dollars")
+        self.assertEqual((p["type"], p["categorie"]), ("vente", "parcelle"))
+        self.assertEqual((p["prix_min"], p["prix_max"], p["devise"]), ("10000", "30000", "USD"))
+        p, _ = analyser_recherche("studio goma moins de 200$")
+        self.assertEqual(p["categorie"], "studio")
+        p, _ = analyser_recherche("bonjour")
+        self.assertEqual(p, {})
+
+    def test_vue_recherche_redirige_avec_filtres(self):
+        r = self.client.get(reverse("listings:recherche"), {"q": "maison à louer à Lubumbashi moins de 500$"}, follow=True)
+        self.assertContains(r, "Recherche comprise")
+        self.assertEqual(r.redirect_chain[0][0].split("?")[0], reverse("listings:liste"))
+
+    def test_pres_de_moi(self):
+        self.creer_bien(objet="Maison proche", latitude=Decimal("-11.670200"), longitude=Decimal("27.490500"))
+        self.creer_bien(objet="Maison lointaine", latitude=Decimal("-4.325000"), longitude=Decimal("15.322200"))
+        r = self.client.get(reverse("listings:liste"), {"lat": "-11.67", "lng": "27.49", "rayon": "10"})
+        self.assertContains(r, "Maison proche")
+        self.assertNotContains(r, "Maison lointaine")
+        self.assertContains(r, " km")
+        r = self.client.get(reverse("listings:liste"), {"lat": "48.8", "lng": "2.3"})  # hors RDC : ignoré
+        self.assertContains(r, "Maison lointaine")
+
+    def test_api_marche(self):
+        for p in (200, 300, 400):
+            self.creer_bien(prix=Decimal(p))
+        r = self.client.get(reverse("listings:api_marche"), {"type": "location", "categorie": "maison", "ville": self.lubumbashi.pk, "devise": "USD"})
+        d = r.json()
+        self.assertTrue(d["disponible"])
+        self.assertEqual(d["n"], 3)
+        r = self.client.get(reverse("listings:api_marche"), {"type": "location", "categorie": "parcelle", "ville": self.lubumbashi.pk})
+        self.assertFalse(r.json()["disponible"])
+
+
+class TestPwaSeoAccueil(Base):
+    def test_pwa_seo(self):
+        b = self.creer_bien()
+        self.assertEqual(self.client.get(reverse("listings:manifest")).json()["display"], "standalone")
+        sw = self.client.get("/sw.js")
+        self.assertEqual(sw["Content-Type"].split(";")[0], "application/javascript")
+        self.assertContains(sw, "hors-ligne")
+        self.assertContains(self.client.get("/robots.txt"), "Sitemap:")
+        self.assertContains(self.client.get("/sitemap.xml"), b.reference)
+        d = self.client.get(b.get_absolute_url())
+        self.assertContains(d, "application/ld+json")
+        self.assertContains(d, '"priceCurrency": "USD"')
+        self.assertContains(self.client.get(reverse("listings:hors_ligne")), "hors ligne")
+
+    def test_accueil_une_et_baisses(self):
+        self.creer_bien(objet="Villa vedette", a_la_une_jusqua=timezone.now() + timedelta(days=3))
+        b = self.creer_bien(objet="Maison soldée", prix=Decimal("500"))
+        b.prix = Decimal("400")
+        b.save()
+        r = self.client.get(reverse("listings:accueil"))
+        self.assertContains(r, "Villa vedette")
+        self.assertContains(r, "Prix en baisse")
+        self.assertContains(r, "Maison soldée")
+
+    def test_espace_compte(self):
+        self.client.force_login(self.user)
+        self.assertContains(self.client.get(reverse("accounts:espace")), "Mes annonces")
+        self.assertEqual(self.client.get(reverse("listings:comparer")).status_code, 200)

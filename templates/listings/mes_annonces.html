@@ -13,6 +13,7 @@
     <div><dt>Vues</dt><dd>{{ totaux.vues }}</dd></div>
     <div><dt>Contacts reçus</dt><dd>{{ totaux.contacts }}</dd></div>
     <div><dt>Mises en favori</dt><dd>{{ totaux.favoris }}</dd></div>
+    <div class="stats__action"><dt>Visites à confirmer</dt><dd><a href="{% url 'listings:visites' %}">{{ totaux.visites }}</a></dd></div>
   </dl>
 
   {% if biens %}
@@ -27,6 +28,7 @@
         <h2><a href="{{ b.get_absolute_url }}">{{ b.objet }}</a></h2>
         <p>{{ b.localisation_courte }}, {{ b.prix_affiche }}{% if b.est_location %} par mois{% endif %}</p>
         <p class="aide">{{ b.vues|pluriel:"vue" }}, {{ b.contacts|pluriel:"contact" }}, {{ b.nb_favoris|pluriel:"favori" }}. Réf. {{ b.reference }}</p>
+        {% with c=b.confiance %}<p class="aide">Indice de confiance : <b>{{ c.score }}/100</b>, {{ c.niveau|lower }}. <a href="{{ b.get_absolute_url }}#confiance">Voir les conseils</a></p>{% endwith %}
       </div>
       <div class="gestion__actions">
         <a class="bouton bouton--petit bouton--contour" href="{% url 'listings:modifier' b.reference %}">Modifier</a>

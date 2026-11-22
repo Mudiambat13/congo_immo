@@ -10,4 +10,5 @@ urlpatterns = [
     path("deconnexion/", LogoutView.as_view(), name="deconnexion"),
     path("inscription/", views.inscription, name="inscription"),
     path("profil/", views.profil, name="profil"),
+    path("espace/", views.espace, name="espace"),
 ]

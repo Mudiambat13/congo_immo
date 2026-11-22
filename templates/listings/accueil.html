@@ -5,7 +5,17 @@
   <div class="conteneur heros__grille">
     <div class="heros__texte">
       <h1>Un toit, une parcelle, un local. Partout en RDC.</h1>
-      <p class="heros__sous">Des annonces avec photos, position GPS et conditions claires : loyer, garantie, superficie, documents.</p>
+      <p class="heros__sous">Décrivez ce que vous cherchez avec vos mots. Congo Immo trouve les biens qui correspondent.</p>
+      <form class="phrase" action="{% url 'listings:recherche' %}" method="get" role="search">
+        <label class="sr-only" for="phrase-q">Votre recherche en une phrase</label>
+        <input id="phrase-q" type="search" name="q" placeholder="3 chambres à Lubumbashi, 500 $ max" autocomplete="off" required>
+        <button class="bouton bouton--soleil" type="submit">Chercher</button>
+      </form>
+      <ul class="exemples" aria-label="Exemples de recherche">
+        <li><a href="{% url 'listings:recherche' %}?q=studio à louer à Goma moins de 200$">Studio à Goma, moins de 200 $</a></li>
+        <li><a href="{% url 'listings:recherche' %}?q=parcelle à vendre à Lubumbashi">Parcelle à vendre à Lubumbashi</a></li>
+        <li><button type="button" class="lien-bouton lien-bouton--clair" data-pres-de-moi-accueil><svg class="ic" width="18" height="18" aria-hidden="true"><use href="#i-near"/></svg> Biens autour de moi</button></li>
+      </ul>
     </div>
     <div class="enseigne" aria-hidden="true">
       <span class="enseigne__mot">À louer</span>
@@ -39,7 +49,7 @@
           {% for val, lib in categories %}<option value="{{ val }}">{{ lib }}</option>{% endfor %}
         </select>
       </label>
-      <label>Budget maximum (USD)
+      <label>Budget maximum
         <input type="number" name="prix_max" min="0" inputmode="numeric" placeholder="ex. 500">
       </label>
       <button class="bouton bouton--grand" type="submit">Rechercher</button>
@@ -55,6 +65,23 @@
     <li><a href="{% url 'listings:liste' %}?ville={{ v.id }}">{{ v.nom }} <span>{{ v.n }}</span></a></li>
     {% endfor %}
   </ul>
+</section>
+{% endif %}
+
+{% if a_la_une %}
+<section class="conteneur section section--serree">
+  <div class="section__tete"><h2 class="section__titre">À la une</h2></div>
+  <div class="grille">{% for b in a_la_une %}{% include "listings/_fiche.html" %}{% endfor %}</div>
+</section>
+{% endif %}
+
+{% if baisses %}
+<section class="conteneur section section--serree">
+  <div class="section__tete">
+    <h2 class="section__titre">Prix en baisse</h2>
+    <p class="aide">Ces propriétaires ont baissé leur prix ces 30 derniers jours.</p>
+  </div>
+  <div class="grille">{% for b in baisses %}{% include "listings/_fiche.html" %}{% endfor %}</div>
 </section>
 {% endif %}
 
@@ -75,8 +102,8 @@
     <h2>Vous avez un bien à louer ou à vendre ?</h2>
     <ol class="etapes">
       <li><b>Créez votre compte.</b> Un numéro de téléphone suffit.</li>
-      <li><b>Décrivez le bien.</b> Jusqu'à {{ MAX_PHOTOS }} photos, le loyer, la garantie, le quartier et la position GPS.</li>
-      <li><b>Imprimez l'affiche.</b> Collez-la sur le portail : le QR code ouvre votre annonce.</li>
+      <li><b>Décrivez le bien.</b> Jusqu'à {{ MAX_PHOTOS }} photos, le loyer, la garantie, le quartier et la position GPS. Le prix du quartier vous est indiqué en direct.</li>
+      <li><b>Recevez des visites.</b> Les demandes de visite arrivent dans votre espace, avec un bouton pour répondre sur WhatsApp. L'affiche avec QR code se colle sur le portail.</li>
     </ol>
     <a class="bouton bouton--soleil bouton--grand" href="{% url 'listings:creer' %}">Publier un bien gratuitement</a>
   </div>
@@ -97,9 +124,9 @@
 <section class="conteneur section section--serree">
   <div class="alerte-bloc">
     <h2>Avant de payer, vérifiez.</h2>
-    <p>Visitez le bien, demandez les documents et ne versez jamais de garantie à distance. Chaque annonce a un bouton « Signaler » : notre équipe vérifie.</p>
+    <p>Visitez le bien, demandez les documents et ne versez jamais de garantie à distance. Chaque annonce affiche un indice de confiance et un bouton « Signaler » : notre équipe vérifie.</p>
     <a class="lien-fort" href="{% url 'listings:conseils' %}">Lire les conseils de sécurité</a>
   </div>
-  <p class="chiffres">{{ nb_biens }} annonce{{ nb_biens|pluralize }} dans {{ nb_villes }} ville{{ nb_villes|pluralize }}, publiée{{ nb_proprietaires|pluralize }} par {{ nb_proprietaires }} annonceur{{ nb_proprietaires|pluralize }}.</p>
+  <p class="chiffres">{{ nb_biens }} annonce{{ nb_biens|pluralize }} dans {{ nb_villes }} ville{{ nb_villes|pluralize }}, publiée{{ nb_biens|pluralize }} par {{ nb_proprietaires }} annonceur{{ nb_proprietaires|pluralize }}.</p>
 </section>
 {% endblock %}

@@ -1,7 +1,12 @@
+import re
+from datetime import date, timedelta
+
 from django import forms
 from django.conf import settings
 
-from .models import Bien, Equipement, PhotoBien, Province, Quartier, Signalement, Ville
+from accounts.utils import normaliser_telephone
+
+from .models import Bien, DemandeVisite, Equipement, PhotoBien, Province, Quartier, Signalement, Ville
 
 
 class MultipleFileInput(forms.ClearableFileInput):
@@ -158,6 +163,7 @@ class BienForm(forms.ModelForm):
             debut = bien.photos.count()
             for i, f in enumerate(self.cleaned_data.get("photos_nouvelles") or []):
                 PhotoBien.objects.create(bien=bien, image=f, ordre=debut + i)
+            bien.detecter_photos_dupliquees()
         return bien
 
 
@@ -166,3 +172,41 @@ class SignalementForm(forms.ModelForm):
         model = Signalement
         fields = ["motif", "message"]
         widgets = {"message": forms.Textarea(attrs={"rows": 3, "placeholder": "Dites-nous ce qui ne va pas (facultatif)"})}
+
+
+class VisiteForm(forms.ModelForm):
+    site_web = forms.CharField(required=False, widget=forms.TextInput(attrs={"tabindex": "-1", "autocomplete": "off", "aria-hidden": "true"}))  # piège anti-robots
+
+    class Meta:
+        model = DemandeVisite
+        fields = ["nom", "telephone", "date_souhaitee", "creneau", "message"]
+        labels = {"nom": "Votre nom", "telephone": "Votre téléphone", "date_souhaitee": "Jour souhaité", "creneau": "Moment de la journée", "message": "Message"}
+        widgets = {
+            "nom": forms.TextInput(attrs={"autocomplete": "name"}),
+            "telephone": forms.TextInput(attrs={"inputmode": "tel", "autocomplete": "tel", "placeholder": "0812345678"}),
+            "date_souhaitee": forms.DateInput(format="%Y-%m-%d", attrs={"type": "date"}),
+            "message": forms.TextInput(attrs={"placeholder": "Facultatif : nombre de personnes, question..."}),
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        auj = date.today()
+        self.fields["date_souhaitee"].widget.attrs.update({"min": auj.isoformat(), "max": (auj + timedelta(days=30)).isoformat()})
+        self.fields["message"].required = False
+
+    def clean_telephone(self):
+        n = normaliser_telephone(self.cleaned_data["telephone"])
+        if not re.fullmatch(r"\d{9,15}", n):
+            raise forms.ValidationError("Numéro invalide. Exemple : 0812345678.")
+        return n
+
+    def clean_date_souhaitee(self):
+        d = self.cleaned_data["date_souhaitee"]
+        if d < date.today() or d > date.today() + timedelta(days=30):
+            raise forms.ValidationError("Choisissez un jour dans les 30 prochains jours.")
+        return d
+
+    def clean_site_web(self):
+        if self.cleaned_data.get("site_web"):
+            raise forms.ValidationError("Demande refusée.")
+        return ""

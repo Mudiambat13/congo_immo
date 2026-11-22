@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block titre %}Notifications | Congo Immo{% endblock %}
+{% block contenu %}
+<div class="conteneur page-simple">
+  <h1>Notifications</h1>
+  {% if notifications %}
+  <ul class="notifs">
+    {% for n in notifications %}
+    <li class="notif notif--{{ n.type }}{% if not n.lu %} notif--neuve{% endif %}">
+      <a href="{{ n.lien }}">
+        <span class="notif__type">{{ n.get_type_display }}{% if not n.lu %} <span class="badge badge--nouveau">Nouveau</span>{% endif %}</span>
+        <b>{{ n.titre }}</b>
+        {% if n.message %}<span class="notif__msg">{{ n.message }}</span>{% endif %}
+        <span class="aide">Il y a {{ n.cree_le|timesince }}</span>
+      </a>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="vide vide--bloc">
+    <h2>Rien de nouveau.</h2>
+    <p>Vous serez prévenu ici des nouvelles annonces qui correspondent à vos alertes, des baisses de prix sur vos favoris et des demandes de visite.</p>
+    <a class="bouton bouton--contour" href="{% url 'listings:alertes' %}">Gérer mes alertes</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

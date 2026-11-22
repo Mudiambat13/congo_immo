@@ -31,6 +31,7 @@
         {% include "listings/_champ.html" with champ=form.objet %}
       </div>
       {% include "listings/_champ.html" with champ=form.description %}
+      <p class="aide-redaction"><button type="button" class="bouton bouton--contour bouton--petit" data-rediger>Rédiger la description pour moi</button> <span class="aide-inline">Le texte est composé à partir des champs remplis. Relisez-le et corrigez-le.</span></p>
       <div class="trois" data-logement>
         {% include "listings/_champ.html" with champ=form.chambres %}
         {% include "listings/_champ.html" with champ=form.salons %}
@@ -74,6 +75,7 @@
         {% include "listings/_champ.html" with champ=form.prix %}
         {% include "listings/_champ.html" with champ=form.devise %}
       </div>
+      <p class="indice-marche" data-marche-hint hidden></p>
       <div data-only="location">
         <div class="deux">
           {% include "listings/_champ.html" with champ=form.garantie_mois %}

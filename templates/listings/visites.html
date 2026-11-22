@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block titre %}Demandes de visite | Congo Immo{% endblock %}
+{% block contenu %}
+<div class="conteneur page-simple">
+  <h1>Demandes de visite</h1>
+  {% if attente %}
+  <h2 class="section__titre">À confirmer</h2>
+  <ul class="gestion gestion--simple">
+    {% for v in attente %}
+    <li class="gestion__ligne gestion__ligne--simple">
+      <div class="gestion__texte">
+        <p class="gestion__statut">{{ v.bien.objet }}, {{ v.bien.localisation_courte }}</p>
+        <h2>{{ v.nom }}, le {{ v.date_souhaitee|date:"l j F" }}</h2>
+        <p>{{ v.get_creneau_display }}. Téléphone : <a href="tel:+{{ v.telephone }}">{{ v.telephone }}</a></p>
+        {% if v.message %}<p class="aide">« {{ v.message }} »</p>{% endif %}
+      </div>
+      <div class="gestion__actions gestion__actions--ligne">
+        <form method="post" action="{% url 'listings:statut_visite' v.pk %}">{% csrf_token %}<button class="bouton bouton--petit" name="statut" value="confirmee">Confirmer</button></form>
+        <form method="post" action="{% url 'listings:statut_visite' v.pk %}">{% csrf_token %}<button class="bouton bouton--petit bouton--contour" name="statut" value="refusee">Refuser</button></form>
+        <a class="bouton bouton--petit bouton--whatsapp" href="{{ v.lien_whatsapp }}" target="_blank" rel="noopener"><svg width="18" height="18" aria-hidden="true"><use href="#i-whatsapp"/></svg>Répondre</a>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if traitees %}
+  <h2 class="section__titre">Déjà traitées</h2>
+  <ul class="gestion gestion--simple">
+    {% for v in traitees %}
+    <li class="gestion__ligne gestion__ligne--simple gestion__ligne--{% if v.statut == 'confirmee' %}disponible{% else %}retire{% endif %}">
+      <div class="gestion__texte">
+        <p class="gestion__statut">{{ v.bien.objet }}, {{ v.get_statut_display }}</p>
+        <h2>{{ v.nom }}, le {{ v.date_souhaitee|date:"l j F" }}</h2>
+        <p>{{ v.get_creneau_display }}</p>
+      </div>
+      <div class="gestion__actions gestion__actions--ligne">
+        <a class="bouton bouton--petit bouton--whatsapp" href="{{ v.lien_whatsapp }}" target="_blank" rel="noopener"><svg width="18" height="18" aria-hidden="true"><use href="#i-whatsapp"/></svg>Écrire</a>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% endif %}
+  {% if not attente and not traitees %}
+  <div class="vide vide--bloc">
+    <h2>Aucune demande de visite.</h2>
+    <p>Les personnes intéressées peuvent demander une visite depuis la page de votre annonce. Vous êtes prévenu ici et par notification.</p>
+    <a class="bouton" href="{% url 'listings:mes_annonces' %}">Mes annonces</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

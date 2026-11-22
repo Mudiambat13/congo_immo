@@ -10,14 +10,14 @@ Choix volontaire de ne pas utiliser React : pages rendues côté serveur (légè
 ```bash
 python -m venv venv && source venv/bin/activate      # Windows : venv\Scripts\activate
 pip install -r requirements.txt
-python manage.py migrate
+python manage.py migrate        # applique aussi la migration 0002 (v2)
 python manage.py seed_geo          # 26 provinces, 37 villes, quartiers courants, équipements
 python manage.py seed_demo         # (facultatif) 10 annonces d'exemple, compte demo@congoimmo.cd / demo1234
 python manage.py createsuperuser   # accès à /admin/
 python manage.py runserver
 ```
 
-Ouvrez http://127.0.0.1:8000. Lancer les tests : `python manage.py test` (27 tests).
+Ouvrez http://127.0.0.1:8000. Lancer les tests : `python manage.py test` (48 tests).
 
 ## Ce que fait le site
 
@@ -41,6 +41,40 @@ Ouvrez http://127.0.0.1:8000. Lancer les tests : `python manage.py test` (27 tes
 **Administration (`/admin/`)**
 - Badge « vérifié » (annonce ou annonceur), masquer une annonce, traiter les signalements, gérer provinces, villes, quartiers et équipements.
 
+## Nouveautés de la v2
+
+**Pour chercher**
+- **Recherche en une phrase** (accueil) : « maison 3 chambres à Lubumbashi quartier Golf moins de 500 $ » est transformée en filtres (type, catégorie, chambres, ville, quartier, fourchette de prix, devise). Analyse par règles, sans service externe ni clé d'API. Le site affiche ce qu'il a compris.
+- **Près de moi** : géolocalisation, rayon de 2 à 50 km, résultats triés par distance.
+- **Alertes de recherche** : « Me prévenir des nouvelles annonces » enregistre la recherche (10 maximum par compte). À la publication d'un bien, les personnes concernées reçoivent une notification (cloche dans l'en-tête). E-mail en option : `ALERTES_EMAIL=1` + SMTP.
+- **Baisses de prix** : historique du prix, badge « Prix en baisse de X % », rubrique d'accueil, et notification à ceux qui ont le bien en favori.
+- **Comparateur** de 3 biens côte à côte (prix, entrée à prévoir, garantie, équipements, indice de confiance), le moins cher est marqué.
+- **Carte** avec pastilles de prix et regroupement des biens proches.
+
+**Pour décider**
+- **Indice de confiance** (0 à 100) par annonce : photos, GPS, description, conditions claires, annonceur vérifié, annonce contrôlée. Le public voit les points acquis ; le propriétaire voit aussi ce qui lui manque. Ce n'est pas une garantie, et la fiche le dit.
+- **Demande de visite** (jour + moment de la journée) : notification au propriétaire, page « Demandes de visite » avec Confirmer / Refuser et bouton WhatsApp pré-rempli. Protection : champ piège anti-robots et 5 demandes par heure et par adresse IP.
+- **Galerie plein écran** (glisser, flèches du clavier), partage natif du téléphone.
+
+**Pour les propriétaires**
+- **Prix du marché pendant la saisie** : le formulaire indique les prix comparables du quartier (3 annonces minimum) et si votre prix est au-dessus ou en dessous.
+- **« Rédiger la description pour moi »** : texte composé à partir des champs remplis.
+- **À la une** : champ `a_la_une_jusqua`, action d'administration « Mettre à la une pendant 7 jours » (prêt pour un paiement Mobile Money plus tard).
+- **Détection de photos réutilisées** : empreinte perceptuelle de chaque photo ; une photo quasi identique à celle d'un autre annonceur crée un signalement visible **seulement par les modérateurs** (ce n'est pas une preuve : deux agents peuvent légitimement présenter le même bien).
+
+**Design et technique**
+- **Mode sombre** automatique (réglage du téléphone) avec bouton clair/sombre.
+- **Navigation mobile en bas d'écran** (Accueil, Chercher, Publier, Favoris, Compte) et barre WhatsApp / Appeler / Visite collée en bas des fiches.
+- **Application installable (PWA)** : manifeste, icônes, raccourcis ; **les fiches déjà ouvertes restent lisibles hors ligne**, utile quand le réseau coupe.
+- **SEO** : `sitemap.xml`, `robots.txt`, données structurées schema.org sur chaque fiche.
+- Correctif de sécurité : les redirections `next` sont limitées au site lui-même.
+
+## Notes de production (v2)
+- Le plafond de demandes de visite utilise le cache Django. Avec plusieurs processus, configurez un cache partagé (Redis) pour que la limite soit commune.
+- La détection de photos compare les empreintes en Python (20 000 photos au maximum) : suffisant pour démarrer ; au-delà, déplacez-la dans une tâche de fond.
+- Les alertes sont calculées à la publication, dans la requête : au-delà de quelques milliers d'alertes, passez par une tâche de fond (Celery, RQ).
+- Le service worker ne met en cache que les pages `/bien/<référence>/`, les images et les fichiers statiques, jamais l'espace connecté ni l'administration.
+
 ## Structure
 
 ```
@@ -63,5 +97,5 @@ static/        css/app.css, js/app.js
 
 - Les cartes utilisent les tuiles publiques d'OpenStreetMap : parfait pour démarrer ; en forte audience, prenez un fournisseur de tuiles dédié.
 - Le comptage des appels repose sur un clic : indicatif, pas infaillible.
-- Pistes : alertes de recherche par WhatsApp/SMS, paiement Mobile Money pour les annonces « à la une », vérification d'identité par pièce, version swahili/lingala, PWA.
+- Pistes : envoi des alertes par WhatsApp/SMS, paiement Mobile Money pour les annonces « à la une », vérification d'identité par pièce, version swahili/lingala, visite virtuelle à 360°.
 - La liste des types de documents est une aide pratique, pas un avis juridique : vérifiez toujours un titre auprès des services compétents.

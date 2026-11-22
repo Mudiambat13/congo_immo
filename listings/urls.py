@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import views
+from . import views, views_plus
 
 app_name = "listings"
 
@@ -17,7 +17,23 @@ urlpatterns = [
     path("favoris/", views.mes_favoris, name="favoris"),
     path("conseils/", views.conseils, name="conseils"),
     path("agent/<int:pk>/", views.profil_public, name="profil_public"),
+    path("recherche/", views_plus.recherche_intelligente, name="recherche"),
+    path("comparer/", views_plus.comparer, name="comparer"),
+    path("comparer/vider/", views_plus.vider_comparaison, name="vider_comparaison"),
+    path("comparer/<str:ref>/", views_plus.basculer_comparaison, name="basculer_comparaison"),
+    path("alertes/", views_plus.mes_alertes, name="alertes"),
+    path("alertes/sauvegarder/", views_plus.sauvegarder_recherche, name="sauvegarder_recherche"),
+    path("alertes/<int:pk>/", views_plus.action_alerte, name="action_alerte"),
+    path("notifications/", views_plus.notifications, name="notifications"),
+    path("visites/", views_plus.visites_recues, name="visites"),
+    path("visites/<int:pk>/statut/", views_plus.statut_visite, name="statut_visite"),
+    path("api/marche/", views_plus.api_marche, name="api_marche"),
+    path("manifest.webmanifest", views_plus.manifest, name="manifest"),
+    path("sw.js", views_plus.service_worker, name="sw"),
+    path("hors-ligne/", views_plus.hors_ligne, name="hors_ligne"),
+    path("robots.txt", views_plus.robots, name="robots"),
     path("bien/<str:ref>/", views.detail, name="detail"),
+    path("bien/<str:ref>/visite/", views_plus.demander_visite, name="visite"),
     path("bien/<str:ref>/modifier/", views.modifier, name="modifier"),
     path("bien/<str:ref>/supprimer/", views.supprimer, name="supprimer"),
     path("bien/<str:ref>/statut/", views.changer_statut, name="statut"),

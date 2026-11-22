@@ -2,9 +2,12 @@
 {% load immo l10n %}
 {% block titre %}{{ b.objet }}, {{ b.localisation_courte }} : {{ b.prix_affiche }}{% if b.est_location %} par mois{% endif %} | Congo Immo{% endblock %}
 {% block description %}{{ b.get_type_annonce_display }} à {{ b.localisation_courte }}. {{ b.description|truncatechars:140 }}{% endblock %}
+{% block classe_body %}page-detail{% endblock %}
 {% block head %}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 {% with c=b.couverture %}{% if c %}<meta property="og:image" content="{{ request.scheme }}://{{ request.get_host }}{{ c.image.url }}">{% endif %}{% endwith %}
-<meta property="og:title" content="{{ b.objet }}, {{ b.localisation_courte }}">{% endblock %}
+<meta property="og:title" content="{{ b.objet }}, {{ b.localisation_courte }}">
+<meta property="og:type" content="website">
+<script type="application/ld+json">{{ jsonld|safe }}</script>{% endblock %}
 {% block contenu %}
 <div class="conteneur detail">
   <nav class="fil" aria-label="Fil d'Ariane">
@@ -18,14 +21,16 @@
 
   <div class="detail__grille">
     <div class="detail__principal">
-      <div class="galerie" data-galerie>
+      <div class="galerie" data-galerie data-photos="{{ photos_json }}">
         {% with photos=b.photos.all %}
         {% if photos %}
-        <a class="galerie__grande" href="{{ photos.0.image.url }}" target="_blank" rel="noopener"><img src="{{ photos.0.image.url }}" alt="{{ b.objet }}, photo 1" data-galerie-grande width="1200" height="800"></a>
+        <a class="galerie__grande" href="{{ photos.0.image.url }}" data-lightbox-ouvrir="0"><img src="{{ photos.0.image.url }}" alt="{{ b.objet }}, photo 1" data-galerie-grande width="1200" height="800">
+          {% if photos|length > 1 %}<span class="galerie__compte"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-grille"/></svg>Voir les {{ photos|length }} photos</span>{% endif %}
+        </a>
         {% if photos|length > 1 %}
         <ul class="galerie__vignettes">
           {% for ph in photos %}
-          <li><button type="button" data-galerie-vignette data-src="{{ ph.image.url }}" aria-label="Voir la photo {{ forloop.counter }}"><img src="{% if ph.miniature %}{{ ph.miniature.url }}{% else %}{{ ph.image.url }}{% endif %}" alt="" loading="lazy" width="160" height="107"></button></li>
+          <li><button type="button" data-galerie-vignette data-src="{{ ph.image.url }}" data-index="{{ forloop.counter0 }}" aria-label="Voir la photo {{ forloop.counter }}"><img src="{% if ph.miniature %}{{ ph.miniature.url }}{% else %}{{ ph.image.url }}{% endif %}" alt="" loading="lazy" width="160" height="107"></button></li>
           {% endfor %}
         </ul>
         {% endif %}
@@ -34,10 +39,29 @@
       </div>
 
       <header class="detail__tete">
-        <p class="detail__type detail__type--{{ b.type_annonce }}">{{ b.get_type_annonce_display }} <span>{{ b.get_categorie_display }}</span></p>
+        <p class="detail__type detail__type--{{ b.type_annonce }}">{{ b.get_type_annonce_display }} <span>{{ b.get_categorie_display }}</span>
+          {% if b.est_a_la_une %}<span class="badge badge--une">À la une</span>{% endif %}
+          {% if b.baisse_pct %}<span class="badge badge--baisse">Prix en baisse de {{ b.baisse_pct }} %</span>{% elif b.est_nouveau %}<span class="badge badge--nouveau">Nouveau</span>{% endif %}
+        </p>
         <h1>{{ b.objet }}{% if b.est_verifie %}<svg class="verif" width="26" height="26" role="img" aria-label="Annonce vérifiée"><use href="#i-verif"/></svg>{% endif %}</h1>
         <p class="detail__lieu"><svg width="18" height="18" aria-hidden="true"><use href="#i-pin"/></svg>{{ b.adresse }}, {{ b.localisation_courte }}, {{ b.ville.province.nom }}</p>
       </header>
+
+      <section class="bloc confiance confiance--{{ confiance.classe }}" id="confiance" aria-labelledby="t-conf">
+        <div class="score" style="--p: {{ confiance.score }}" role="img" aria-label="Indice de confiance : {{ confiance.score }} sur 100"><span>{{ confiance.score }}</span></div>
+        <div class="confiance__texte">
+          <h2 id="t-conf">Annonce {{ confiance.niveau|lower }}</h2>
+          <p class="confiance__sous">Indice de confiance : {{ confiance.score }} sur 100</p>
+          <ul class="confiance__liste">
+            {% for c in confiance.criteres %}{% if c.ok %}<li class="ok"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-shield"/></svg>{{ c.libelle }}</li>{% endif %}{% endfor %}
+          </ul>
+          {% if est_proprio %}
+          {% if confiance.manquants %}<p class="conseil-titre">Pour améliorer votre indice :</p>
+          <ul class="conseils">{% for c in confiance.manquants %}<li>{{ c.conseil }} <b>(+{{ c.a_gagner }} point{{ c.a_gagner|pluralize }})</b></li>{% endfor %}</ul>{% endif %}
+          {% endif %}
+          <p class="aide">Indice calculé automatiquement à partir des informations de l'annonce. Ce n'est pas une garantie : visitez toujours le bien avant de payer.</p>
+        </div>
+      </section>
 
       <section class="bloc" aria-labelledby="t-desc">
         <h2 id="t-desc">Description</h2>
@@ -77,18 +101,48 @@
       </section>
       {% endif %}
 
-      {% if marche %}
-      <section class="bloc" aria-labelledby="t-marche">
-        <h2 id="t-marche">Ce prix comparé au marché</h2>
+      {% if historique or marche %}
+      <section class="bloc" aria-labelledby="t-prix">
+        <h2 id="t-prix">Le prix en contexte</h2>
+        {% if historique %}
+        <ul class="historique">
+          {% for h in historique %}<li><span class="historique__date">{{ h.cree_le|date:"j F Y" }}</span> {{ h.ancien_prix|floatformat:"0" }} {% if b.devise == "USD" %}${% else %}FC{% endif %} <span aria-hidden="true">→</span><span class="sr-only">devient</span> <b>{{ h.nouveau_prix|floatformat:"0" }} {% if b.devise == "USD" %}${% else %}FC{% endif %}</b>
+            {% if h.nouveau_prix < h.ancien_prix %}<span class="badge badge--baisse">baisse</span>{% else %}<span class="badge badge--hausse">hausse</span>{% endif %}</li>{% endfor %}
+        </ul>
+        {% endif %}
+        {% if marche %}
         <p class="texte">{{ marche.n }} bien{{ marche.n|pluralize:"s" }} comparable{{ marche.n|pluralize:"s" }} {{ marche.n|pluralize:"est,sont" }} en ligne à {{ marche.portee }} : {{ marche.mini }} au minimum, {{ marche.maxi }} au maximum, {{ marche.moyenne }} en moyenne.
         {% if marche.ecart is not None %}Ce bien est {% if marche.ecart > 5 %}<b>{{ marche.ecart }} % au-dessus</b> de la moyenne.{% elif marche.ecart < -5 %}<b>{{ marche.ecart|cut:"-" }} % en dessous</b> de la moyenne.{% else %}<b>dans la moyenne</b>.{% endif %}{% endif %}</p>
+        {% endif %}
+      </section>
+      {% endif %}
+
+      {% if peut_visiter and not est_proprio %}
+      <section class="bloc bloc--visite" id="visite" aria-labelledby="t-visite">
+        <h2 id="t-visite"><svg class="ic" width="22" height="22" aria-hidden="true"><use href="#i-cal"/></svg>Demander une visite</h2>
+        <p class="aide">Choisissez un jour et un moment. {{ b.proprietaire.nom_affiche }} vous répond par WhatsApp ou par téléphone pour confirmer.</p>
+        <form method="post" action="{% url 'listings:visite' b.reference %}" class="formulaire formulaire--visite" novalidate>
+          {% csrf_token %}
+          {% if form_visite.errors %}<div class="erreurs" role="alert"><p><b>La demande n'est pas partie.</b> Corrigez les champs en rouge.</p></div>{% endif %}
+          <div class="deux">
+            {% include "listings/_champ.html" with champ=form_visite.nom %}
+            {% include "listings/_champ.html" with champ=form_visite.telephone %}
+          </div>
+          <div class="deux">
+            {% include "listings/_champ.html" with champ=form_visite.date_souhaitee %}
+            {% include "listings/_champ.html" with champ=form_visite.creneau %}
+          </div>
+          {% include "listings/_champ.html" with champ=form_visite.message %}
+          <div class="piege" aria-hidden="true">{{ form_visite.site_web }}</div>
+          <button class="bouton" type="submit">Envoyer la demande de visite</button>
+        </form>
       </section>
       {% endif %}
 
       <section class="bloc" aria-labelledby="t-carte">
         <h2 id="t-carte">Localisation</h2>
         {% if b.a_gps %}
-        {% localize off %}<div id="carte-bien" class="carte" data-lat="{{ b.latitude }}" data-lng="{{ b.longitude }}" data-titre="{{ b.objet }}" role="region" aria-label="Position du bien sur la carte"></div>{% endlocalize %}
+        {% localize off %}<div id="carte-bien" class="carte" data-lat="{{ b.latitude }}" data-lng="{{ b.longitude }}" data-titre="{{ b.objet }}" data-prix="{{ b.prix_court }}" role="region" aria-label="Position du bien sur la carte"></div>{% endlocalize %}
         <p class="aide"><a href="https://www.google.com/maps/dir/?api=1&destination={% localize off %}{{ b.latitude }},{{ b.longitude }}{% endlocalize %}" target="_blank" rel="noopener">Obtenir l'itinéraire dans Google Maps</a></p>
         {% else %}
         <p class="texte">{{ b.adresse }}, {{ b.localisation_courte }}. Le propriétaire n'a pas indiqué de position GPS : demandez le point exact au contact.</p>
@@ -99,10 +153,12 @@
     <aside class="detail__lateral">
       <div class="contact">
         <p class="contact__prix">{{ b.prix_affiche }}{% if b.est_location %}<small>par mois</small>{% endif %}</p>
+        {% if b.baisse_pct %}<p class="contact__baisse"><s>{{ b.prix_avant_affiche }}</s> Prix en baisse de {{ b.baisse_pct }} %</p>{% endif %}
         {% if b.entree_total %}<p class="contact__entree">{{ b.entree_total }} à l'entrée</p>{% endif %}
         {% if b.statut == "disponible" %}
         <a class="bouton bouton--whatsapp bouton--bloc" href="{% url 'listings:contact' b.reference 'whatsapp' %}" target="_blank" rel="noopener"><svg width="22" height="22" aria-hidden="true"><use href="#i-whatsapp"/></svg>Écrire sur WhatsApp</a>
         <a class="bouton bouton--contour bouton--bloc" href="tel:+{{ b.proprietaire.telephone }}" data-appel="{% url 'listings:contact' b.reference 'appel' %}"><svg width="20" height="20" aria-hidden="true"><use href="#i-tel"/></svg>Appeler {{ b.proprietaire.telephone_affiche }}</a>
+        {% if peut_visiter and not est_proprio %}<a class="bouton bouton--soleil bouton--bloc" href="#visite"><svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-cal"/></svg>Demander une visite</a>{% endif %}
         {% endif %}
         <div class="contact__annonceur">
           <p><a href="{% url 'listings:profil_public' b.proprietaire_id %}"><b>{{ b.proprietaire.nom_affiche }}</b></a>{% if b.proprietaire.est_verifie %}<svg class="verif" width="18" height="18" role="img" aria-label="Identité vérifiée"><use href="#i-verif"/></svg>{% endif %}</p>
@@ -116,7 +172,8 @@
             </form>
             {% else %}<a class="lien-icone favori" href="{% url 'accounts:connexion' %}?next={{ request.path|urlencode }}"><svg width="20" height="20"><use href="#i-coeur"/></svg><span>Favori</span></a>{% endif %}
           </li>
-          <li><a class="lien-icone" target="_blank" rel="noopener" href="https://wa.me/?text={{ b.objet|urlencode:'' }}%20{{ request.build_absolute_uri|urlencode:'' }}"><svg width="20" height="20" aria-hidden="true"><use href="#i-whatsapp"/></svg><span>Partager</span></a></li>
+          <li><button type="button" class="lien-icone{% if b.reference in comparaison_refs %} is-on{% endif %}" data-comparer="{{ b.reference }}" aria-pressed="{% if b.reference in comparaison_refs %}true{% else %}false{% endif %}"><svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-compare"/></svg><span>Comparer</span></button></li>
+          <li><a class="lien-icone" data-partager data-titre="{{ b.objet }} à {{ b.localisation_courte }}" data-url="{{ request.build_absolute_uri }}" target="_blank" rel="noopener" href="https://wa.me/?text={{ b.objet|urlencode:'' }}%20{{ request.build_absolute_uri|urlencode:'' }}"><svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-share"/></svg><span>Partager</span></a></li>
           <li><button type="button" class="lien-icone" data-copier="{{ request.build_absolute_uri }}"><span>Copier le lien</span></button></li>
         </ul>
         <p class="aide contact__ref">Référence {{ b.reference }}. Publiée le {{ b.cree_le|date:"j F Y" }}. {{ b.vues|pluriel:"vue" }}.</p>
@@ -154,5 +211,14 @@
   </section>
   {% endif %}
 </div>
+
+{% if b.statut == "disponible" %}
+<div class="barre-contact">
+  <div class="barre-contact__prix"><b>{{ b.prix_court }}</b>{% if b.est_location %}<small>par mois</small>{% endif %}</div>
+  <a class="bouton bouton--whatsapp" href="{% url 'listings:contact' b.reference 'whatsapp' %}" target="_blank" rel="noopener" aria-label="Écrire sur WhatsApp"><svg width="22" height="22" aria-hidden="true"><use href="#i-whatsapp"/></svg>WhatsApp</a>
+  <a class="bouton bouton--contour" href="tel:+{{ b.proprietaire.telephone }}" data-appel="{% url 'listings:contact' b.reference 'appel' %}" aria-label="Appeler"><svg width="20" height="20" aria-hidden="true"><use href="#i-tel"/></svg><span class="barre-contact__lib">Appeler</span></a>
+  {% if peut_visiter and not est_proprio %}<a class="bouton bouton--soleil" href="#visite" aria-label="Demander une visite"><svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-cal"/></svg></a>{% endif %}
+</div>
+{% endif %}
 {% endblock %}
 {% block scripts %}<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>{% endblock %}

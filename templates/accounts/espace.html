@@ -1,0 +1,19 @@
+{% extends "base.html" %}
+{% block titre %}Mon espace | Congo Immo{% endblock %}
+{% block contenu %}
+<section class="conteneur page-simple">
+  <h1>Bonjour {{ user.first_name|default:"vous" }}</h1>
+  <ul class="espace">
+    <li><a href="{% url 'listings:mes_annonces' %}"><b>Mes annonces</b><span>{{ nb_annonces }} bien{{ nb_annonces|pluralize:"s" }} publié{{ nb_annonces|pluralize:"s" }}</span></a></li>
+    <li><a href="{% url 'listings:visites' %}"><b>Demandes de visite</b><span>{% if nb_visites %}{{ nb_visites }} à confirmer{% else %}Aucune en attente{% endif %}</span></a></li>
+    <li><a href="{% url 'listings:notifications' %}"><b>Notifications</b><span>{% if nb_notifs %}{{ nb_notifs }} non lue{{ nb_notifs|pluralize }}{% else %}Tout est lu{% endif %}</span></a></li>
+    <li><a href="{% url 'listings:alertes' %}"><b>Mes alertes</b><span>{{ nb_alertes }} active{{ nb_alertes|pluralize }}</span></a></li>
+    <li><a href="{% url 'listings:favoris' %}"><b>Mes favoris</b><span>{{ nb_favoris }} bien{{ nb_favoris|pluralize:"s" }}</span></a></li>
+    <li><a href="{% url 'listings:comparer' %}"><b>Comparateur</b><span>{{ comparaison_refs|length }} bien{{ comparaison_refs|length|pluralize:"s" }} sélectionné{{ comparaison_refs|length|pluralize:"s" }}</span></a></li>
+    <li><a href="{% url 'accounts:profil' %}"><b>Mon profil</b><span>Nom, téléphone, présentation</span></a></li>
+    <li><a href="{% url 'listings:conseils' %}"><b>Éviter les arnaques</b><span>Conseils de sécurité</span></a></li>
+  </ul>
+  <form method="post" action="{% url 'accounts:deconnexion' %}">{% csrf_token %}<button class="bouton bouton--contour" type="submit">Se déconnecter</button></form>
+  <p><button type="button" class="lien-bouton" data-installer hidden>Installer l'application sur ce téléphone</button></p>
+</section>
+{% endblock %}

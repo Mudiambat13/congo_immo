@@ -1,7 +1,7 @@
 {% extends "base.html" %}
-{% load immo %}
+{% load immo l10n %}
 {% block titre %}{{ titre }}{% if p.ville %} : résultats{% endif %} | Congo Immo{% endblock %}
-{% block head %}{% if vue == "carte" %}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">{% endif %}{% endblock %}
+{% block head %}{% if vue == "carte" %}<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"><link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css">{% endif %}{% endblock %}
 {% block contenu %}
 <section class="conteneur section section--haut">
   <div class="section__tete">
@@ -14,6 +14,8 @@
 
   <form class="filtres" method="get" action="">
     {% if vue == "carte" %}<input type="hidden" name="vue" value="carte">{% endif %}
+    <input type="hidden" name="lat" value="{% if position %}{{ position.lat|unlocalize }}{% endif %}">
+    <input type="hidden" name="lng" value="{% if position %}{{ position.lng|unlocalize }}{% endif %}">
     <div class="filtres__ligne">
       {% if not type_fixe %}
       <label>Type d'annonce
@@ -48,7 +50,13 @@
           <option value="CDF" {% if p.devise == "CDF" %}selected{% endif %}>CDF</option>
         </select>
       </label>
+      {% if position %}
+      <label>Rayon
+        <select name="rayon">{% for r in rayons %}<option value="{{ r }}" {% if position.rayon == r %}selected{% endif %}>{{ r }} km</option>{% endfor %}</select>
+      </label>
+      {% endif %}
       <button class="bouton" type="submit">Filtrer</button>
+      <button class="bouton bouton--contour" type="button" data-pres-de-moi><svg class="ic" width="18" height="18" aria-hidden="true"><use href="#i-near"/></svg>Près de moi</button>
     </div>
     <details class="filtres__plus" {% if p.chambres or p.document or p.verifie or p.q or p.tri %}open{% endif %}>
       <summary>Plus de critères</summary>
@@ -84,6 +92,21 @@
     {% if filtres_actifs %}<a href="{% if type_fixe %}{% if type_fixe == 'location' %}{% url 'listings:louer' %}{% else %}{% url 'listings:acheter' %}{% endif %}{% else %}{% url 'listings:liste' %}{% endif %}">Effacer les filtres</a>{% endif %}
   </p>
 
+  <div class="actions-recherche">
+    {% if position %}<span class="chip-info"><svg class="ic" width="16" height="16" aria-hidden="true"><use href="#i-near"/></svg>Autour de vous, dans {{ position.rayon }} km <a href="?{% garder_params lat='' lng='' rayon='' %}">Retirer</a></span>{% endif %}
+    {% if filtres_actifs or type_fixe %}
+      {% if user.is_authenticated %}
+      <form method="post" action="{% url 'listings:sauvegarder_recherche' %}">{% csrf_token %}
+        <input type="hidden" name="parametres" value="{{ request.GET.urlencode }}{% if type_fixe %}&type={{ type_fixe }}{% endif %}">
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <button class="bouton bouton--contour bouton--petit" type="submit"><svg class="ic" width="18" height="18" aria-hidden="true"><use href="#i-bell"/></svg>Me prévenir des nouvelles annonces</button>
+      </form>
+      {% else %}
+      <a class="bouton bouton--contour bouton--petit" href="{% url 'accounts:connexion' %}?next={{ request.get_full_path|urlencode }}"><svg class="ic" width="18" height="18" aria-hidden="true"><use href="#i-bell"/></svg>Connectez-vous pour créer une alerte</a>
+      {% endif %}
+    {% endif %}
+  </div>
+
   {% if vue == "carte" %}
   <div id="carte-resultats" class="carte carte--grande" data-geojson="{% url 'listings:geojson' %}?{{ request.GET.urlencode }}{% if type_fixe %}&type={{ type_fixe }}{% endif %}" role="region" aria-label="Carte des biens"></div>
   <p class="aide">Les biens sans position GPS n'apparaissent pas sur la carte : ils sont dans la liste ci-dessous.</p>
@@ -107,4 +130,4 @@
   {% endif %}
 </section>
 {% endblock %}
-{% block scripts %}{% if vue == "carte" %}<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>{% endif %}{% endblock %}
+{% block scripts %}{% if vue == "carte" %}<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script><script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>{% endif %}{% endblock %}

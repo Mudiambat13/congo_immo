@@ -1,3 +1,5 @@
+import json
+from datetime import timedelta
 from urllib.parse import quote
 
 import segno
@@ -9,11 +11,14 @@ from django.core.paginator import Paginator
 from django.db.models import Count, F, Q
 from django.http import Http404, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
+from django.utils.http import url_has_allowed_host_and_scheme
 from django.views.decorators.http import require_POST
 
-from .filtres import appliquer_filtres, biens_publics
-from .forms import BienForm, SignalementForm
-from .models import Bien, Favori, Province, Quartier, Ville
+from .filtres import appliquer_filtres, biens_publics, lire_position, proches
+from .forms import BienForm, SignalementForm, VisiteForm
+from .services import notifier_alertes
+from .models import Bien, DemandeVisite, Favori, Province, Quartier, Ville
 
 User = get_user_model()
 
@@ -29,6 +34,8 @@ def accueil(request):
         .filter(n__gt=0).order_by("-n")[:8]
     )
     contexte = {
+        "a_la_une": base.filter(a_la_une_jusqua__gt=timezone.now())[:6],
+        "baisses": base.filter(prix_baisse_le__gte=timezone.now() - timedelta(days=30), prix_avant_baisse__isnull=False)[:6],
         "a_louer": base.filter(type_annonce="location")[:6],
         "a_vendre": base.filter(type_annonce="vente")[:6],
         "villes_populaires": villes,
@@ -41,14 +48,25 @@ def accueil(request):
     return render(request, "listings/accueil.html", contexte)
 
 
+def _retour(request, defaut):
+    """Redirection sûre : seulement vers ce même site."""
+    suivant = request.POST.get("next") or ""
+    if suivant and url_has_allowed_host_and_scheme(suivant, allowed_hosts={request.get_host()}, require_https=request.is_secure()):
+        return redirect(suivant)
+    return redirect(defaut)
+
+
 def liste(request, type_annonce=None, vue=None):
     params = request.GET.copy()
     if type_annonce:
         params["type"] = type_annonce
     qs = appliquer_filtres(biens_publics(), params)
-    page = Paginator(qs, 12).get_page(params.get("page"))
+    pos = lire_position(params)
+    resultats = proches(qs, *pos) if pos else qs
+    page = Paginator(resultats, 12).get_page(params.get("page"))
     titre = {"location": "Biens à louer", "vente": "Biens à vendre"}.get(params.get("type"), "Tous les biens")
     vue = vue or params.get("vue")
+    filtres_actifs = any(params.get(k) for k in ("categorie", "province", "ville", "quartier", "prix_min", "prix_max", "chambres", "document", "verifie", "q", "devise")) or bool(pos)
     contexte = {
         "page": page, "total": page.paginator.count, "titre": titre, "p": params,
         "vue": "carte" if vue == "carte" else "liste",
@@ -56,7 +74,9 @@ def liste(request, type_annonce=None, vue=None):
         "categories": Bien.Categorie.choices,
         "documents": Bien.Document.choices,
         "type_fixe": type_annonce,
-        "filtres_actifs": any(params.get(k) for k in ("categorie", "province", "ville", "quartier", "prix_min", "prix_max", "chambres", "document", "verifie", "q", "devise")),
+        "filtres_actifs": filtres_actifs,
+        "position": {"lat": pos[0], "lng": pos[1], "rayon": pos[2]} if pos else None,
+        "rayons": (2, 5, 10, 25, 50),
     }
     return render(request, "listings/liste.html", contexte)
 
@@ -70,7 +90,7 @@ def geojson(request):
             "type": "Feature",
             "geometry": {"type": "Point", "coordinates": [float(b.longitude), float(b.latitude)]},
             "properties": {
-                "ref": b.reference, "objet": b.objet, "prix": b.prix_affiche, "location": b.est_location,
+                "ref": b.reference, "objet": b.objet, "prix": b.prix_affiche, "court": b.prix_court, "une": b.est_a_la_une, "location": b.est_location,
                 "lieu": b.localisation_courte, "url": b.get_absolute_url(),
                 "image": c.miniature.url if c and c.miniature else (c.image.url if c else ""),
                 "detail": f"{b.chambres} ch." if b.chambres else (f"{float(b.superficie):g} m²" if b.superficie else ""),
@@ -87,11 +107,52 @@ def api_quartiers(request):
     return JsonResponse({"quartiers": noms})
 
 
-def detail(request, ref):
-    bien = get_object_or_404(
+def _charger_bien(ref):
+    return get_object_or_404(
         Bien.objects.select_related("ville__province", "quartier", "proprietaire").prefetch_related("photos", "equipements"),
         reference=ref,
     )
+
+
+def _jsonld(request, b):
+    """Données structurées schema.org : Google peut afficher le prix et les photos dans ses résultats."""
+    data = {
+        "@context": "https://schema.org", "@type": "RealEstateListing", "name": b.objet, "description": b.description[:300],
+        "url": request.build_absolute_uri(b.get_absolute_url()), "datePosted": b.cree_le.date().isoformat(),
+        "image": [request.build_absolute_uri(p.image.url) for p in b.photos.all()],
+        "offers": {"@type": "Offer", "price": str(int(b.prix)), "priceCurrency": b.devise,
+                   "availability": "https://schema.org/InStock" if b.statut == Bien.Statut.DISPONIBLE else "https://schema.org/SoldOut"},
+        "address": {"@type": "PostalAddress", "streetAddress": b.adresse, "addressLocality": b.ville.nom, "addressRegion": b.ville.province.nom, "addressCountry": "CD"},
+    }
+    if b.a_gps:
+        data["geo"] = {"@type": "GeoCoordinates", "latitude": float(b.latitude), "longitude": float(b.longitude)}
+    return json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
+
+
+def rendre_detail(request, bien, form_visite=None, form_signal=None):
+    est_proprio = request.user.is_authenticated and request.user == bien.proprietaire
+    if form_visite is None:
+        initial = {"nom": request.user.nom_affiche, "telephone": request.user.telephone} if request.user.is_authenticated else {}
+        form_visite = VisiteForm(initial=initial)
+    dispo = bien.statut == Bien.Statut.DISPONIBLE and bien.publie
+    similaires = (
+        biens_publics().filter(statut=Bien.Statut.DISPONIBLE, ville=bien.ville, type_annonce=bien.type_annonce)
+        .exclude(pk=bien.pk)[:3]
+    )
+    contexte = {
+        "b": bien, "est_proprio": est_proprio, "similaires": similaires,
+        "marche": bien.statistiques_marche() if dispo else None,
+        "form_signal": form_signal or SignalementForm(), "form_visite": form_visite,
+        "doc_label": bien.get_type_document_display() if bien.type_document else "",
+        "confiance": bien.confiance(), "historique": list(bien.historique_prix.all()[:5]),
+        "jsonld": _jsonld(request, bien), "photos_json": json.dumps([p.image.url for p in bien.photos.all()]),
+        "peut_visiter": dispo,
+    }
+    return render(request, "listings/detail.html", contexte)
+
+
+def detail(request, ref):
+    bien = _charger_bien(ref)
     est_proprio = request.user.is_authenticated and request.user == bien.proprietaire
     if (not bien.publie or bien.statut == Bien.Statut.RETIRE) and not (est_proprio or request.user.is_staff):
         raise Http404
@@ -99,17 +160,7 @@ def detail(request, ref):
     if bien.pk not in vus and not est_proprio:
         Bien.objects.filter(pk=bien.pk).update(vues=F("vues") + 1)
         request.session["vus"] = (vus + [bien.pk])[-200:]
-    similaires = (
-        biens_publics().filter(statut=Bien.Statut.DISPONIBLE, ville=bien.ville, type_annonce=bien.type_annonce)
-        .exclude(pk=bien.pk)[:3]
-    )
-    contexte = {
-        "b": bien, "est_proprio": est_proprio, "similaires": similaires,
-        "marche": bien.statistiques_marche() if bien.statut == Bien.Statut.DISPONIBLE else None,
-        "form_signal": SignalementForm(),
-        "doc_label": bien.get_type_document_display() if bien.type_document else "",
-    }
-    return render(request, "listings/detail.html", contexte)
+    return rendre_detail(request, bien)
 
 
 @login_required
@@ -117,6 +168,7 @@ def creer(request):
     form = BienForm(request.POST or None, request.FILES or None, initial={"type_annonce": request.GET.get("type") or "location"})
     if request.method == "POST" and form.is_valid():
         bien = form.save(proprietaire=request.user)
+        notifier_alertes(bien)
         messages.success(request, f"Annonce publiée. Référence {bien.reference} : imprimez l'affiche à coller sur le bien.")
         return redirect(bien)
     return render(request, "listings/formulaire.html", {"form": form, "mode": "creation", "villes": Ville.objects.all()})
@@ -153,7 +205,7 @@ def changer_statut(request, ref):
         bien.save(update_fields=["statut", "modifie_le"])
         libelle = {"disponible": "remise en ligne", "conclu": "marquée comme " + ("louée" if bien.est_location else "vendue"), "retire": "retirée du site"}[nouveau]
         messages.success(request, f"Annonce {libelle}.")
-    return redirect(request.POST.get("next") or "listings:mes_annonces")
+    return _retour(request, "listings:mes_annonces")
 
 
 @login_required
@@ -168,6 +220,7 @@ def mes_annonces(request):
         "contacts": sum(b.contacts for b in biens),
         "favoris": sum(b.nb_favoris for b in biens),
         "actives": sum(1 for b in biens if b.statut == Bien.Statut.DISPONIBLE and b.publie),
+        "visites": DemandeVisite.objects.filter(bien__proprietaire=request.user, statut="attente").count(),
     }
     return render(request, "listings/mes_annonces.html", {"biens": biens, "totaux": totaux})
 
@@ -188,7 +241,7 @@ def basculer_favori(request, ref):
         f.delete()
     if request.headers.get("x-requested-with") == "fetch":
         return JsonResponse({"favori": cree})
-    return redirect(request.POST.get("next") or bien.get_absolute_url())
+    return _retour(request, bien.get_absolute_url())
 
 
 @require_POST

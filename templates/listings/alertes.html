@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block titre %}Mes alertes | Congo Immo{% endblock %}
+{% block contenu %}
+<div class="conteneur page-simple">
+  <h1>Mes alertes</h1>
+  <p class="intro">Vous recevez une notification dès qu'une nouvelle annonce correspond à une recherche enregistrée. Pour en créer une, faites une recherche puis touchez « Me prévenir des nouvelles annonces ».</p>
+  {% if alertes %}
+  <ul class="gestion gestion--simple">
+    {% for a in alertes %}
+    <li class="gestion__ligne gestion__ligne--simple{% if not a.active %} gestion__ligne--retire{% endif %}">
+      <div class="gestion__texte">
+        <h2>{{ a.resume }}</h2>
+        <p class="aide">{% if a.active %}Active{% else %}En pause{% endif %}, créée le {{ a.cree_le|date:"j F Y" }}</p>
+      </div>
+      <div class="gestion__actions gestion__actions--ligne">
+        <a class="bouton bouton--petit" href="{{ a.lien }}">Voir les annonces</a>
+        <form method="post" action="{% url 'listings:action_alerte' a.pk %}">{% csrf_token %}<button class="bouton bouton--petit bouton--contour" name="action" value="basculer">{% if a.active %}Mettre en pause{% else %}Réactiver{% endif %}</button></form>
+        <form method="post" action="{% url 'listings:action_alerte' a.pk %}">{% csrf_token %}<button class="bouton bouton--petit bouton--contour" name="action" value="supprimer">Supprimer</button></form>
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <div class="vide vide--bloc">
+    <h2>Aucune alerte pour l'instant.</h2>
+    <p>Cherchez par exemple une maison à louer dans votre quartier avec un budget maximum, puis enregistrez la recherche.</p>
+    <a class="bouton" href="{% url 'listings:liste' %}">Faire une recherche</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

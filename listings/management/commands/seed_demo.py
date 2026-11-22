@@ -95,4 +95,12 @@ class Command(BaseCommand):
             for k in range(3 if typ == "vente" else 4):
                 PhotoBien.objects.create(bien=b, image=en_jpeg(image_factice(i * 10 + k, vente=(cat in ("parcelle", "concession")))), ordre=k)
             n += 1
+        if n:
+            from datetime import timedelta
+            from django.utils import timezone
+            biens = list(Bien.objects.filter(proprietaire=user).order_by("id"))
+            biens[1].a_la_une_jusqua = timezone.now() + timedelta(days=7)
+            biens[1].save()
+            biens[0].prix = biens[0].prix * Decimal("0.9")  # baisse de 10 % : badge, historique, notification aux favoris
+            biens[0].save()
         self.stdout.write(self.style.SUCCESS(f"{n} annonces de démonstration créées. Connexion : demo@congoimmo.cd / demo1234"))

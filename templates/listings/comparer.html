@@ -1,0 +1,55 @@
+{% extends "base.html" %}
+{% load immo %}
+{% block titre %}Comparer les biens | Congo Immo{% endblock %}
+{% block classe_body %}page-comparer{% endblock %}
+{% block contenu %}
+<div class="conteneur section section--haut">
+  <div class="section__tete">
+    <h1 class="section__titre section__titre--grand">Comparer les biens</h1>
+    {% if biens %}<form method="post" action="{% url 'listings:vider_comparaison' %}">{% csrf_token %}<button class="bouton bouton--contour bouton--petit" type="submit">Tout retirer</button></form>{% endif %}
+  </div>
+  {% if biens %}
+  <p class="aide">Le moins cher est marqué quand les biens sont du même type et dans la même monnaie.</p>
+  <div class="defilant">
+  <table class="comparatif">
+    <caption class="sr-only">Comparaison de {{ biens|length }} biens</caption>
+    <thead>
+      <tr><td></td>
+        {% for b in biens %}
+        <th scope="col">
+          <a class="comparatif__photo" href="{{ b.get_absolute_url }}">{% with c=b.couverture %}{% if c %}<img src="{% if c.miniature %}{{ c.miniature.url }}{% else %}{{ c.image.url }}{% endif %}" alt="" width="320" height="213">{% endif %}{% endwith %}</a>
+          <a href="{{ b.get_absolute_url }}">{{ b.objet }}</a>
+          <form method="post" action="{% url 'listings:basculer_comparaison' b.reference %}">{% csrf_token %}<button class="lien-bouton" type="submit">Retirer</button></form>
+        </th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      <tr><th scope="row">Prix</th>{% for b in biens %}<td class="{% if b.reference == meilleur %}meilleur{% endif %}"><b>{{ b.prix_affiche }}</b>{% if b.est_location %} par mois{% endif %}{% if b.reference == meilleur %}<span class="badge badge--nouveau">Le moins cher</span>{% endif %}</td>{% endfor %}</tr>
+      <tr><th scope="row">Type</th>{% for b in biens %}<td>{{ b.get_type_annonce_display }}, {{ b.get_categorie_display|lower }}</td>{% endfor %}</tr>
+      <tr><th scope="row">Lieu</th>{% for b in biens %}<td>{{ b.localisation_courte }}<br><span class="aide">{{ b.adresse }}</span></td>{% endfor %}</tr>
+      <tr><th scope="row">Chambres</th>{% for b in biens %}<td>{{ b.chambres|default_if_none:"-" }}</td>{% endfor %}</tr>
+      <tr><th scope="row">Salons</th>{% for b in biens %}<td>{{ b.salons|default_if_none:"-" }}</td>{% endfor %}</tr>
+      <tr><th scope="row">Sanitaires</th>{% for b in biens %}<td>{{ b.sanitaires|default_if_none:"-" }}</td>{% endfor %}</tr>
+      <tr><th scope="row">Superficie</th>{% for b in biens %}<td>{% if b.superficie %}{{ b.superficie|floatformat:"-1" }} m²{% else %}-{% endif %}</td>{% endfor %}</tr>
+      <tr><th scope="row">Prix au m²</th>{% for b in biens %}<td>{{ b.prix_m2|default:"-" }}</td>{% endfor %}</tr>
+      <tr><th scope="row">Garantie</th>{% for b in biens %}<td>{% if b.est_location %}{% if b.garantie_mois %}{{ b.garantie_mois }} mois{% elif b.garantie_mois == 0 %}Aucune{% else %}-{% endif %}{% else %}-{% endif %}</td>{% endfor %}</tr>
+      <tr><th scope="row">À l'entrée</th>{% for b in biens %}<td>{{ b.entree_total|default:"-" }}</td>{% endfor %}</tr>
+      <tr><th scope="row">Document</th>{% for b in biens %}<td>{% if b.type_document %}{{ b.get_type_document_display }}{% else %}-{% endif %}</td>{% endfor %}</tr>
+      <tr><th scope="row">Indice de confiance</th>{% for b in biens %}<td>{{ b.confiance.score }}/100</td>{% endfor %}</tr>
+      {% for l in lignes_equipements %}
+      <tr><th scope="row">{{ l.nom }}</th>{% for ok in l.presents %}<td>{% if ok %}<span class="oui">Oui</span>{% else %}<span class="non">Non</span>{% endif %}</td>{% endfor %}</tr>
+      {% endfor %}
+      <tr><th scope="row"></th>{% for b in biens %}<td><a class="bouton bouton--petit" href="{{ b.get_absolute_url }}">Voir l'annonce</a></td>{% endfor %}</tr>
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+  <div class="vide vide--bloc">
+    <h2>Aucun bien à comparer.</h2>
+    <p>Touchez « Comparer » sur 2 ou 3 annonces pour les voir côte à côte.</p>
+    <a class="bouton" href="{% url 'listings:liste' %}">Parcourir les annonces</a>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

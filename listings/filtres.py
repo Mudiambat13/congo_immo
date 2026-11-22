@@ -1,6 +1,8 @@
+import math
 from decimal import Decimal, InvalidOperation
 
-from django.db.models import Q
+from django.db.models import Case, IntegerField, Q, Value, When
+from django.utils import timezone
 
 from .models import Bien
 
@@ -55,5 +57,40 @@ def appliquer_filtres(qs, p):
                 | Q(quartier__nom__icontains=mot) | Q(ville__nom__icontains=mot) | Q(reference__icontains=mot)
             )
     tri = p.get("tri")
-    ordre = {"prix_asc": "prix", "prix_desc": "-prix", "populaire": "-vues"}.get(tri, "-cree_le")
-    return qs.order_by(ordre, "-id")
+    if tri in ("prix_asc", "prix_desc", "populaire"):
+        return qs.order_by({"prix_asc": "prix", "prix_desc": "-prix", "populaire": "-vues"}[tri], "-id")
+    # Par défaut : les annonces « à la une » d'abord, puis les plus récentes.
+    qs = qs.annotate(une=Case(When(a_la_une_jusqua__gt=timezone.now(), then=Value(1)), default=Value(0), output_field=IntegerField()))
+    return qs.order_by("-une", "-cree_le", "-id")
+
+
+def distance_km(lat1, lng1, lat2, lng2):
+    r = 6371.0
+    a = math.sin(math.radians(lat2 - lat1) / 2) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(math.radians(lng2 - lng1) / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def lire_position(p):
+    """(latitude, longitude, rayon_km) si la requête contient une position valide en RDC, sinon None."""
+    try:
+        lat, lng = float(p.get("lat")), float(p.get("lng"))
+    except (TypeError, ValueError):
+        return None
+    if not (-14 <= lat <= 6 and 11 <= lng <= 32):
+        return None
+    rayon = int(p["rayon"]) if str(p.get("rayon", "")).isdigit() and 1 <= int(p["rayon"]) <= 200 else 10
+    return lat, lng, rayon
+
+
+def proches(qs, lat, lng, rayon):
+    """Biens géolocalisés dans le rayon, triés du plus proche au plus lointain (attribut distance_km)."""
+    dlat = rayon / 111.0
+    dlng = rayon / (111.0 * max(math.cos(math.radians(lat)), 0.01))
+    res = []
+    for b in qs.filter(latitude__range=(lat - dlat, lat + dlat), longitude__range=(lng - dlng, lng + dlng)):
+        d = distance_km(lat, lng, float(b.latitude), float(b.longitude))
+        if d <= rayon:
+            b.distance_km = d
+            res.append(b)
+    res.sort(key=lambda b: b.distance_km)
+    return res

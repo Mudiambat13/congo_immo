@@ -5,6 +5,12 @@
       {% if c %}<img src="{% if c.miniature %}{{ c.miniature.url }}{% else %}{{ c.image.url }}{% endif %}" alt="" loading="lazy" width="640" height="427">{% else %}<span class="fiche__vide">Pas de photo</span>{% endif %}
     {% endwith %}
     <span class="fiche__type">{{ b.get_type_annonce_display }}</span>
+    {% if b.est_a_la_une or b.baisse_pct or b.est_nouveau %}
+    <span class="fiche__badges">
+      {% if b.est_a_la_une %}<span class="badge badge--une">À la une</span>{% endif %}
+      {% if b.baisse_pct %}<span class="badge badge--baisse">Prix en baisse de {{ b.baisse_pct }} %</span>{% elif b.est_nouveau %}<span class="badge badge--nouveau">Nouveau</span>{% endif %}
+    </span>
+    {% endif %}
   </a>
   {% if user.is_authenticated %}
   <form method="post" action="{% url 'listings:favori' b.reference %}" class="fiche__favori">
@@ -14,10 +20,11 @@
   {% else %}
   <a class="favori fiche__favori" href="{% url 'accounts:connexion' %}?next={{ request.get_full_path|urlencode }}" aria-label="Se connecter pour enregistrer ce bien"><svg width="22" height="22"><use href="#i-coeur"/></svg></a>
   {% endif %}
+  <button type="button" class="comparer{% if b.reference in comparaison_refs %} is-on{% endif %}" data-comparer="{{ b.reference }}" aria-pressed="{% if b.reference in comparaison_refs %}true{% else %}false{% endif %}" aria-label="Comparer ce bien"><svg class="ic" width="20" height="20" aria-hidden="true"><use href="#i-compare"/></svg><span>Comparer</span></button>
   <div class="fiche__corps">
-    <p class="fiche__prix">{{ b.prix_affiche }}{% if b.est_location %}<small>par mois</small>{% endif %}</p>
+    <p class="fiche__prix">{{ b.prix_affiche }}{% if b.est_location %}<small>par mois</small>{% endif %}{% if b.baisse_pct %}<s class="ancien-prix">{{ b.prix_avant_affiche }}</s>{% endif %}</p>
     <h3 class="fiche__titre"><a href="{{ b.get_absolute_url }}">{{ b.objet }}</a>{% if b.est_verifie or b.proprietaire.est_verifie %}<svg class="verif" width="18" height="18" role="img" aria-label="Annonce vérifiée"><use href="#i-verif"/></svg>{% endif %}</h3>
-    <p class="fiche__lieu"><svg width="15" height="15" aria-hidden="true"><use href="#i-pin"/></svg>{{ b.localisation_courte }}</p>
+    <p class="fiche__lieu"><svg width="15" height="15" aria-hidden="true"><use href="#i-pin"/></svg>{{ b.localisation_courte }}{% if b.distance_km is not None %}<span class="distance">à {{ b.distance_km|floatformat:1 }} km</span>{% endif %}</p>
     <ul class="traits">
       {% if b.chambres %}<li>{{ b.chambres|pluriel:"chambre" }}</li>{% endif %}
       {% if b.salons %}<li>{{ b.salons|pluriel:"salon" }}</li>{% endif %}

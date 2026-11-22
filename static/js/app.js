@@ -83,7 +83,8 @@
     var la = nombre(carteBien.dataset.lat), lo = nombre(carteBien.dataset.lng);
     if (la !== null && lo !== null) {
       var c1 = creerCarte("carte-bien", [la, lo], 16);
-      L.marker([la, lo]).addTo(c1).bindPopup(esc(carteBien.dataset.titre));
+      var pil = L.divIcon({ className: "pill-wrap", html: '<span class="pill">' + esc(carteBien.dataset.prix || "Ici") + "</span>", iconSize: null, iconAnchor: [0, 0], popupAnchor: [0, -34] });
+      L.marker([la, lo], { icon: pil, title: carteBien.dataset.titre }).addTo(c1).bindPopup(esc(carteBien.dataset.titre));
       c1.once("focus", function () { c1.scrollWheelZoom.enable(); });
     }
   }
@@ -94,15 +95,17 @@
     var c2 = creerCarte("carte-resultats", CENTRE_RDC, 5);
     fetch(carteRes.dataset.geojson).then(function (r) { return r.json(); }).then(function (data) {
       var points = [];
+      var groupe = window.L.markerClusterGroup ? L.markerClusterGroup({ showCoverageOnHover: false, maxClusterRadius: 55 }) : c2;
       data.features.forEach(function (f) {
         var p = f.properties, ll = [f.geometry.coordinates[1], f.geometry.coordinates[0]];
-        var icone = L.divIcon({ className: "", html: '<div class="repere repere--' + (p.location ? "location" : "vente") + '" style="width:26px;height:26px"></div>', iconSize: [26, 26], iconAnchor: [13, 26], popupAnchor: [0, -26] });
+        var icone = L.divIcon({ className: "pill-wrap", html: '<span class="pill pill--' + (p.location ? "location" : "vente") + (p.une ? " pill--une" : "") + '">' + esc(p.court || p.prix) + "</span>", iconSize: null, iconAnchor: [0, 0], popupAnchor: [0, -34] });
         var html = '<div class="popup-bien">' + (p.image ? '<img src="' + esc(p.image) + '" alt="">' : "") +
           "<b>" + esc(p.prix) + (p.location ? " par mois" : "") + "</b>" + esc(p.objet) + "<br>" + esc(p.lieu) +
           (p.detail ? "<br>" + esc(p.detail) : "") + '<br><a href="' + esc(p.url) + '">Voir l\'annonce</a></div>';
-        L.marker(ll, { icon: icone, title: p.objet }).addTo(c2).bindPopup(html);
+        L.marker(ll, { icon: icone, title: p.objet }).addTo(groupe).bindPopup(html);
         points.push(ll);
       });
+      if (groupe !== c2) c2.addLayer(groupe);
       if (points.length) c2.fitBounds(points, { padding: [40, 40], maxZoom: 15 });
     });
   }

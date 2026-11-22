@@ -33,3 +33,16 @@ def profil(request):
         messages.success(request, "Profil enregistré.")
         return redirect("accounts:profil")
     return render(request, "accounts/profil.html", {"form": form})
+
+
+@login_required
+def espace(request):
+    """Page « Mon espace » : tout ce qui concerne le compte, utile surtout sur mobile."""
+    from listings.models import DemandeVisite, Favori
+    u = request.user
+    return render(request, "accounts/espace.html", {
+        "nb_visites": DemandeVisite.objects.filter(bien__proprietaire=u, statut="attente").count(),
+        "nb_alertes": u.alertes.filter(active=True).count(),
+        "nb_favoris": Favori.objects.filter(utilisateur=u).count(),
+        "nb_annonces": u.biens.count(),
+    })
